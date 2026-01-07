@@ -1,0 +1,778 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
+
+void main() {
+  runApp(LuaApp());
+}
+
+class LuaApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'LUA Assistant',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        primaryColor: Color(0xFF1a237e),
+        scaffoldBackgroundColor: Color(0xFF0d1421),
+        cardColor: Color(0xFF1e2746),
+        textTheme: TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white70),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Color(0xFF1a237e),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      home: LuaHomePage(),
+    );
+  }
+}
+
+class LuaHomePage extends StatefulWidget {
+  @override
+  _LuaHomePageState createState() => _LuaHomePageState();
+}
+
+class _LuaHomePageState extends State<LuaHomePage>
+    with TickerProviderStateMixin {
+  
+  // Core components
+  late stt.SpeechToText _speech;
+  late FlutterTts _flutterTts;
+  
+  // State variables
+  bool _isListening = false;
+  bool _isAlwaysListening = false;
+  bool _isInitialized = false;
+  String _text = 'Say "Hey LUA" to activate';
+  String _response = '';
+  double _confidence = 1.0;
+  
+  // Animation controllers
+  late AnimationController _pulseController;
+  late AnimationController _waveController;
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _waveAnimation;
+  
+  // Backend configuration
+  String _backendUrl = 'https://your-railway-app.railway.app';
+  String _userId = 'default';
+  
+  // Statistics
+  int _totalCommands = 0;
+  List<Map<String, dynamic>> _recentCommands = [];
+  
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+  
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _waveController.dispose();
+    _stopAlwaysListening();
+    super.dispose();
+  }
+  
+  Future<void> _initializeApp() async {
+    await _requestPermissions();
+    await _initializeSpeech();
+    await _initializeTTS();
+    await _loadSettings();
+    _setupAnimations();
+    
+    setState(() {
+      _isInitialized = true;
+    });
+    
+    // Auto-start always listening
+    _startAlwaysListening();
+  }
+  
+  Future<void> _requestPermissions() async {
+    await Permission.microphone.request();
+    await Permission.phone.request();
+    await Permission.sms.request();
+    await Permission.camera.request();
+    await Permission.storage.request();
+  }
+  
+  Future<void> _initializeSpeech() async {
+    _speech = stt.SpeechToText();
+    bool available = await _speech.initialize(
+      onStatus: _onSpeechStatus,
+      onError: _onSpeechError,
+    );
+    
+    if (!available) {
+      _showError('Speech recognition not available');
+    }
+  }
+  
+  Future<void> _initializeTTS() async {
+    _flutterTts = FlutterTts();
+    await _flutterTts.setLanguage("en-US");
+    await _flutterTts.setPitch(1.0);
+    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setVolume(0.8);
+  }
+  
+  Future<void> _loadSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    _backendUrl = prefs.getString('backend_url') ?? 'https://your-railway-app.railway.app';
+    _userId = prefs.getString('user_id') ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
+    _totalCommands = prefs.getInt('total_commands') ?? 0;
+    
+    await prefs.setString('user_id', _userId);
+  }
+  
+  void _setupAnimations() {
+    _pulseController = AnimationController(
+      duration: Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    
+    _waveController = AnimationController(
+      duration: Duration(milliseconds: 2000),
+      vsync: this,
+    );
+    
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    
+    _waveAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _waveController, curve: Curves.easeInOut),
+    );
+    
+    _pulseController.repeat(reverse: true);
+  }
+  
+  void _onSpeechStatus(String status) {
+    print('Speech status: $status');
+  }
+  
+  void _onSpeechError(dynamic error) {
+    print('Speech error: $error');
+    if (_isAlwaysListening) {
+      Timer(Duration(seconds: 2), () => _startAlwaysListening());
+    }
+  }
+  
+  Future<void> _startAlwaysListening() async {
+    if (!_isInitialized || _isListening) return;
+    
+    setState(() {
+      _isAlwaysListening = true;
+      _isListening = true;
+      _text = 'Listening for "Hey LUA"...';
+    });
+    
+    _waveController.repeat();
+    
+    await _speech.listen(
+      onResult: _onAlwaysListeningResult,
+      listenFor: Duration(minutes: 10),
+      pauseFor: Duration(seconds: 3),
+      partialResults: true,
+      localeId: 'en_US',
+    );
+  }
+  
+  void _onAlwaysListeningResult(result) {
+    String recognizedWords = result.recognizedWords.toLowerCase();
+    
+    if (recognizedWords.contains('hey lua') || recognizedWords.contains('hey lula')) {
+      _activateAssistant();
+    } else if (_isListening && !recognizedWords.contains('hey')) {
+      _processVoiceCommand(recognizedWords);
+    }
+    
+    if (_isAlwaysListening && result.finalResult) {
+      Timer(Duration(milliseconds: 500), () => _startAlwaysListening());
+    }
+  }
+  
+  void _activateAssistant() {
+    setState(() {
+      _text = 'LUA activated! What can I do for you?';
+    });
+    
+    _speak('Yes, how can I help you?');
+    _pulseController.forward();
+    
+    Timer(Duration(seconds: 1), () => _listenForCommand());
+  }
+  
+  Future<void> _listenForCommand() async {
+    await _speech.listen(
+      onResult: (result) {
+        if (result.finalResult) {
+          _processVoiceCommand(result.recognizedWords);
+        } else {
+          setState(() {
+            _text = result.recognizedWords;
+            _confidence = result.confidence;
+          });
+        }
+      },
+      listenFor: Duration(seconds: 10),
+      pauseFor: Duration(seconds: 2),
+    );
+  }
+  
+  void _stopAlwaysListening() {
+    setState(() {
+      _isAlwaysListening = false;
+      _isListening = false;
+      _text = 'LUA is sleeping. Tap to wake up.';
+    });
+    
+    _speech.stop();
+    _waveController.stop();
+    _pulseController.reset();
+  }
+  
+  Future<void> _processVoiceCommand(String command) async {
+    if (command.trim().isEmpty) return;
+    
+    setState(() {
+      _text = command;
+      _response = 'Processing...';
+    });
+    
+    try {
+      final response = await http.post(
+        Uri.parse('$_backendUrl/api/process_voice'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'text': command,
+          'user_id': _userId,
+          'context': {
+            'timestamp': DateTime.now().toIso8601String(),
+            'app_state': 'active'
+          }
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        await _handleCommandResult(result);
+        _updateStats(command, result);
+      } else {
+        _showError('Backend connection failed');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    }
+    
+    Timer(Duration(seconds: 3), () => _startAlwaysListening());
+  }
+  
+  Future<void> _handleCommandResult(Map<String, dynamic> result) async {
+    String responseText = result['response'] ?? 'Command executed';
+    String action = result['action'] ?? 'unknown';
+    
+    setState(() {
+      _response = responseText;
+    });
+    
+    await _speak(responseText);
+    
+    switch (action) {
+      case 'make_call':
+        await _makeCall(result['phone_number'] ?? result['contact_name']);
+        break;
+      case 'send_sms':
+        await _sendSMS(result['contact'], result['message']);
+        break;
+      case 'open_app':
+        await _openApp(result['package'] ?? result['app_name']);
+        break;
+    }
+  }
+  
+  Future<void> _makeCall(String contact) async {
+    try {
+      String url = 'tel:$contact';
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        _showError('Cannot make call');
+      }
+    } catch (e) {
+      _showError('Call failed: $e');
+    }
+  }
+  
+  Future<void> _sendSMS(String contact, String message) async {
+    try {
+      String url = 'sms:$contact?body=${Uri.encodeComponent(message)}';
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        _showError('Cannot send SMS');
+      }
+    } catch (e) {
+      _showError('SMS failed: $e');
+    }
+  }
+  
+  Future<void> _openApp(String appIdentifier) async {
+    try {
+      // Use platform channel for app opening
+      const platform = MethodChannel('lua_assistant/system');
+      await platform.invokeMethod('openApp', {'packageName': appIdentifier});
+    } catch (e) {
+      _showError('Could not open app: $appIdentifier');
+    }
+  }
+  
+  Future<void> _speak(String text) async {
+    try {
+      await _flutterTts.speak(text);
+    } catch (e) {
+      print('TTS error: $e');
+    }
+  }
+  
+  void _updateStats(String command, Map<String, dynamic> result) {
+    setState(() {
+      _totalCommands++;
+      _recentCommands.insert(0, {
+        'command': command,
+        'response': result['response'],
+        'timestamp': DateTime.now(),
+        'success': result['action'] != 'unknown',
+      });
+      
+      if (_recentCommands.length > 10) {
+        _recentCommands.removeLast();
+      }
+    });
+    
+    _saveStats();
+  }
+  
+  Future<void> _saveStats() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('total_commands', _totalCommands);
+  }
+  
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Color(0xFF00bcd4)),
+              SizedBox(height: 20),
+              Text(
+                'Initializing LUA...',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF0d1421),
+              Color(0xFF1a237e).withOpacity(0.3),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(child: _buildVoiceInterface()),
+              _buildQuickActions(),
+              _buildControlPanel(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildHeader() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(Icons.assistant, color: Color(0xFF00bcd4), size: 32),
+          SizedBox(width: 12),
+          Text(
+            'LUA',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Spacer(),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isAlwaysListening ? Colors.green : Colors.red,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              _isAlwaysListening ? 'ACTIVE' : 'SLEEPING',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildVoiceInterface() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _waveAnimation,
+            builder: (context, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (_isListening)
+                    Container(
+                      width: 200 + (_waveAnimation.value * 50),
+                      height: 200 + (_waveAnimation.value * 50),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Color(0xFF00bcd4).withOpacity(0.3),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  
+                  if (_isListening)
+                    Container(
+                      width: 160 + (_waveAnimation.value * 30),
+                      height: 160 + (_waveAnimation.value * 30),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Color(0xFF00bcd4).withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) {
+                      return Transform.scale(
+                        scale: _isListening ? _pulseAnimation.value : 1.0,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [
+                                Color(0xFF00bcd4),
+                                Color(0xFF2196f3),
+                                Color(0xFF1a237e),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFF00bcd4).withOpacity(0.5),
+                                blurRadius: 20,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _isListening ? Icons.mic : Icons.mic_off,
+                            size: 50,
+                            color: Colors.white,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          
+          SizedBox(height: 30),
+          
+          Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Color(0xFF1e2746).withOpacity(0.8),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: Color(0xFF00bcd4).withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  _text,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                if (_response.isNotEmpty) ...[
+                  SizedBox(height: 10),
+                  Divider(color: Color(0xFF00bcd4).withOpacity(0.3)),
+                  SizedBox(height: 10),
+                  Text(
+                    _response,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF00bcd4),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                
+                if (_isListening && _confidence < 1.0) ...[
+                  SizedBox(height: 10),
+                  LinearProgressIndicator(
+                    value: _confidence,
+                    backgroundColor: Colors.grey[800],
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF00bcd4),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildQuickActions() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          Text(
+            'Quick Commands',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildQuickAction(Icons.phone, 'Call', () {
+                _processVoiceCommand('make a call');
+              }),
+              _buildQuickAction(Icons.message, 'Message', () {
+                _processVoiceCommand('send a message');
+              }),
+              _buildQuickAction(Icons.alarm, 'Reminder', () {
+                _processVoiceCommand('set a reminder');
+              }),
+              _buildQuickAction(Icons.music_note, 'Music', () {
+                _processVoiceCommand('play music');
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildQuickAction(IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Color(0xFF1e2746),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Color(0xFF00bcd4).withOpacity(0.3),
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Color(0xFF00bcd4), size: 24),
+            SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildControlPanel() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          GestureDetector(
+            onTap: () {
+              if (_isAlwaysListening) {
+                _stopAlwaysListening();
+              } else {
+                _startAlwaysListening();
+              }
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(
+                  color: Color(0xFF00bcd4),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isAlwaysListening ? Icons.hearing : Icons.hearing_disabled,
+                    color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
+                    size: 20,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    _isAlwaysListening ? 'Always On' : 'Tap to Wake',
+                    style: TextStyle(
+                      color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          GestureDetector(
+            onTap: () => _showStatsDialog(),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Color(0xFF1e2746),
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(
+                  color: Color(0xFF00bcd4).withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.analytics, color: Color(0xFF00bcd4), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    '$_totalCommands',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showStatsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1e2746),
+        title: Text(
+          'LUA Statistics',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Total Commands: $_totalCommands',
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Recent Commands:',
+              style: TextStyle(color: Color(0xFF00bcd4), fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 5),
+            ..._recentCommands.take(5).map((cmd) => Padding(
+              padding: EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '• ${cmd['command']}',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            )).toList(),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close', style: TextStyle(color: Color(0xFF00bcd4))),
+          ),
+        ],
+      ),
+    );
+  }
+}
