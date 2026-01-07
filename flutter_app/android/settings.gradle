@@ -1,15 +1,14 @@
 include ':app'
 
-def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
-def properties = new Properties()
-
-assert localPropertiesFile.exists()
-localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
-
-def flutterSdkPath = properties.getProperty("flutter.sdk")
-assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-
 pluginsManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+        return flutterSdkPath
+    }()
+
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
@@ -25,4 +24,4 @@ pluginsManagement {
     }
 }
 
-include ":app"
+include ':app'
