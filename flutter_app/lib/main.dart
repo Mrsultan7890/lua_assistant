@@ -195,7 +195,6 @@ class _LuaHomePageState extends State<LuaHomePage>
       onResult: _onAlwaysListeningResult,
       listenFor: Duration(minutes: 10),
       pauseFor: Duration(seconds: 3),
-      partialResults: true,
       localeId: 'en_US',
     );
   }
@@ -382,6 +381,7 @@ class _LuaHomePageState extends State<LuaHomePage>
           _isPlaying = data['success'];
           _currentTrack = data['message'] ?? 'Playing music';
         });
+        _speak(data['message'] ?? 'Playing music');
       }
     } catch (e) {
       print('Play music error: $e');
@@ -397,11 +397,11 @@ class _LuaHomePageState extends State<LuaHomePage>
       );
       
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
         setState(() {
           if (action == 'pause') _isPlaying = false;
           if (action == 'play') _isPlaying = true;
         });
+        _speak('Music $action');
       }
     } catch (e) {
       print('Music control error: $e');
@@ -553,6 +553,7 @@ class _LuaHomePageState extends State<LuaHomePage>
             children: [
               _buildHeader(),
               Expanded(child: _buildVoiceInterface()),
+              _buildMusicControls(),
               _buildQuickActions(),
               _buildControlPanel(),
             ],
@@ -868,6 +869,52 @@ class _LuaHomePageState extends State<LuaHomePage>
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildMusicControls() {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 10),
+      padding: EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Music Player',
+            style: TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 10),
+          Text(
+            _currentTrack,
+            style: TextStyle(color: Colors.white70),
+          ),
+          SizedBox(height: 15),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                onPressed: () => _controlMusic('previous'),
+                icon: Icon(Icons.skip_previous, color: Colors.cyanAccent),
+              ),
+              IconButton(
+                onPressed: () => _controlMusic(_isPlaying ? 'pause' : 'play'),
+                icon: Icon(
+                  _isPlaying ? Icons.pause : Icons.play_arrow,
+                  color: Colors.cyanAccent,
+                  size: 40,
+                ),
+              ),
+              IconButton(
+                onPressed: () => _controlMusic('next'),
+                icon: Icon(Icons.skip_next, color: Colors.cyanAccent),
+              ),
+            ],
           ),
         ],
       ),
