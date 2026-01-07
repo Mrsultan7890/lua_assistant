@@ -1,5 +1,3 @@
-include ':app'
-
 pluginsManagement {
     def flutterSdkPath = {
         def properties = new Properties()
