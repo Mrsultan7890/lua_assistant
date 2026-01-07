@@ -4,25 +4,25 @@ description: LUA - Smart Voice Assistant (Jarvis/Alexa Alternative)
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
-  flutter: '>=3.10.0'
+  sdk: '>=2.19.0 <4.0.0'
+  flutter: '>=3.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   
-  # Voice Recognition & TTS (Compatible versions)
-  speech_to_text: ^6.3.0
-  flutter_tts: ^3.8.5
+  # Voice Recognition & TTS (Compatible with Dart 3.1.5)
+  speech_to_text: ^6.1.1
+  flutter_tts: ^3.6.3
   
   # HTTP & Networking
-  http: ^1.1.0
+  http: ^0.13.6
   
   # Permissions (Compatible)
-  permission_handler: ^11.0.1
+  permission_handler: ^10.4.5
   
-  # Device Integration (Compatible with Dart 3.2.0)
-  url_launcher: ^6.3.0
+  # Device Integration (Compatible with Dart 3.1.5)
+  url_launcher: ^6.2.4
   
   # Local Storage
   shared_preferences: ^2.2.2
@@ -31,7 +31,7 @@ dependencies:
   cupertino_icons: ^1.0.6
   
   # Notifications (Compatible)
-  flutter_local_notifications: ^16.3.2
+  flutter_local_notifications: ^15.1.2
 
 dev_dependencies:
   flutter_test:
