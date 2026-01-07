@@ -270,6 +270,12 @@ class _LuaHomePageState extends State<LuaHomePage>
         final result = json.decode(response.body);
         await _handleCommandResult(result);
         _updateStats(command, result);
+        
+        // Handle emotional intelligence response
+        if (result.containsKey('emotion')) {
+          final emotion = result['emotion'];
+          _showEmotionalResponse(emotion);
+        }
       } else {
         _showError('Backend connection failed');
       }
@@ -728,6 +734,57 @@ class _LuaHomePageState extends State<LuaHomePage>
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showEmotionalResponse(Map<String, dynamic> emotion) {
+    final String detectedEmotion = emotion['detected'] ?? 'neutral';
+    final String emotionalResponse = emotion['emotional_response'] ?? '';
+    final List<dynamic> suggestions = emotion['suggestions'] ?? [];
+    
+    if (detectedEmotion != 'neutral' && emotionalResponse.isNotEmpty) {
+      // Show emotional response in UI
+      setState(() {
+        _response = emotionalResponse;
+      });
+      
+      // Speak emotional response
+      _speak(emotionalResponse);
+      
+      // Show suggestions if available
+      if (suggestions.isNotEmpty) {
+        _showEmotionalSuggestions(suggestions.cast<String>());
+      }
+    }
+  }
+  
+  void _showEmotionalSuggestions(List<String> suggestions) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1e2746),
+        title: Text(
+          'I noticed you might need some help',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: suggestions.map((suggestion) => Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              '• $suggestion',
+              style: TextStyle(color: Colors.white70),
+            ),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Thanks', style: TextStyle(color: Color(0xFF00bcd4))),
           ),
         ],
       ),
