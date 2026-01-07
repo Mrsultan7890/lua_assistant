@@ -161,4 +161,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ for the future of voice assistance**
 
-*LUA Assistant - Your personal Jarvis is here!* 🚀
+*LUA Assistant - Your personal Jarvis is here!* 🚀# lua_assistant
