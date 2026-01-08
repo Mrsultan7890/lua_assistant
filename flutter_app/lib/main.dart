@@ -112,6 +112,11 @@ class _LuaHomePageState extends State<LuaHomePage>
     if (_speechAvailable) {
       print('Starting always listening mode...');
       _startAlwaysListening();
+      
+      // Show accessibility info after 3 seconds
+      Timer(Duration(seconds: 3), () {
+        _showAccessibilityInfo();
+      });
     } else {
       print('Speech not available');
     }
@@ -135,8 +140,14 @@ class _LuaHomePageState extends State<LuaHomePage>
       await platform.invokeMethod('startBackgroundService');
       await platform.invokeMethod('requestBatteryOptimization');
       
-      // Enable accessibility service for true background listening
-      await platform.invokeMethod('enableAccessibilityService');
+      // Try to enable accessibility service (optional)
+      try {
+        await platform.invokeMethod('enableAccessibilityService');
+        print('Accessibility service prompt shown');
+      } catch (e) {
+        print('Accessibility service not available: $e');
+        _showAccessibilityInfo();
+      }
       
       print('Background service started for notification');
     } catch (e) {
@@ -1358,3 +1369,53 @@ class _LuaHomePageState extends State<LuaHomePage>
   
 
 }
+  void _showAccessibilityInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1e2746),
+        title: Text(
+          'MIUI Security Restriction',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'MIUI is blocking accessibility service.',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Solutions:',
+              style: TextStyle(color: Color(0xFF00bcd4), fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '1. Sign out from Mi Account temporarily',
+              style: TextStyle(color: Colors.white70),
+            ),
+            Text(
+              '2. Use ADB commands with USB debugging',
+              style: TextStyle(color: Colors.white70),
+            ),
+            Text(
+              '3. Keep app open for "Hey LUA" to work',
+              style: TextStyle(color: Colors.white70),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'App works normally when open!',
+              style: TextStyle(color: Color(0xFF4caf50)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Got It', style: TextStyle(color: Color(0xFF00bcd4))),
+          ),
+        ],
+      ),
+    );
+  }
