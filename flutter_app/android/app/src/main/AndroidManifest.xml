@@ -22,7 +22,11 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+    <!-- Device Admin for system-level access -->
+    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
+    <uses-permission android:name="android.permission.CAPTURE_AUDIO_HOTWORD" />
+    <uses-permission android:name="android.permission.MANAGE_VOICE_KEYPHRASES" />
+    <uses-permission android:name="android.permission.BIND_VOICE_INTERACTION" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     
     <!-- Features -->
@@ -64,17 +68,27 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
         
-        <!-- Accessibility Service for system-level voice recognition -->
+        <!-- Voice Interaction Service like Google Assistant -->
         <service
-            android:name=".LuaAccessibilityService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:name=".LuaVoiceInteractionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
+                <action android:name="android.service.voice.VoiceInteractionService" />
             </intent-filter>
             <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+        </service>
+        
+        <!-- Hotword Detection Service -->
+        <service
+            android:name=".LuaHotwordDetectionService"
+            android:permission="android.permission.CAPTURE_AUDIO_HOTWORD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.voice.HotwordDetectionService" />
+            </intent-filter>
         </service>
         
         <!-- Floating Indicator Service -->

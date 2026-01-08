@@ -45,8 +45,8 @@ class MainActivity: FlutterActivity() {
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
                 }
-                "enableAccessibilityService" -> {
-                    enableAccessibilityService(result)
+                "enableVoiceInteraction" -> {
+                    enableVoiceInteraction(result)
                 }
                 else -> {
                     result.notImplemented()
@@ -71,9 +71,14 @@ class MainActivity: FlutterActivity() {
             methodChannel?.invokeMethod("wakeWordDetected", null)
         }
         
-        if (intent?.getBooleanExtra("accessibility_wake_word", false) == true) {
-            // Wake word detected by accessibility service
-            methodChannel?.invokeMethod("accessibilityWakeWord", null)
+        if (intent?.getBooleanExtra("voice_interaction_wake", false) == true) {
+            // Voice interaction wake detected
+            methodChannel?.invokeMethod("voiceInteractionWake", null)
+        }
+        
+        if (intent?.getBooleanExtra("voice_session_active", false) == true) {
+            // Voice session is active
+            methodChannel?.invokeMethod("voiceSessionActive", null)
         }
     }
     
@@ -191,14 +196,14 @@ class MainActivity: FlutterActivity() {
         }
     }
     
-    private fun enableAccessibilityService(result: MethodChannel.Result) {
+    private fun enableVoiceInteraction(result: MethodChannel.Result) {
         try {
-            val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            val intent = Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
-            result.success("Accessibility settings opened")
+            result.success("Voice interaction settings opened")
         } catch (e: Exception) {
-            result.error("ACCESSIBILITY_ERROR", "Failed to open accessibility settings: ${e.message}", null)
+            result.error("VOICE_INTERACTION_ERROR", "Failed to open voice interaction settings: ${e.message}", null)
         }
     }
 }
