@@ -45,6 +45,9 @@ class MainActivity: FlutterActivity() {
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
                 }
+                "enableAccessibilityService" -> {
+                    enableAccessibilityService(result)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -66,6 +69,11 @@ class MainActivity: FlutterActivity() {
         if (intent?.getBooleanExtra("wake_word_detected", false) == true) {
             // Wake word was detected by background service
             methodChannel?.invokeMethod("wakeWordDetected", null)
+        }
+        
+        if (intent?.getBooleanExtra("accessibility_wake_word", false) == true) {
+            // Wake word detected by accessibility service
+            methodChannel?.invokeMethod("accessibilityWakeWord", null)
         }
     }
     
@@ -180,6 +188,15 @@ class MainActivity: FlutterActivity() {
             }
         } catch (e: Exception) {
             result.error("BATTERY_ERROR", "Failed to request battery optimization: ${e.message}", null)
+        }
+    private fun enableAccessibilityService(result: MethodChannel.Result) {
+        try {
+            val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            result.success("Accessibility settings opened")
+        } catch (e: Exception) {
+            result.error("ACCESSIBILITY_ERROR", "Failed to open accessibility settings: ${e.message}", null)
         }
     }
 }
