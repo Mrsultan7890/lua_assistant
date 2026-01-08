@@ -132,6 +132,10 @@ Just say "Hey LUA" anytime to activate me. Try it now!
             if any(word in command_lower for word in ['help', 'commands', 'what can you do']):
                 return self.handle_help_command()
             
+            # Check for reminders first (before calls)
+            elif any(word in command_lower for word in ['remind', 'reminder', 'alert']):
+                return self.handle_reminder(command_text)
+            
             elif any(word in command_lower for word in ['open', 'launch', 'start']):
                 return self.handle_app_launch(command_text)
             
@@ -140,9 +144,6 @@ Just say "Hey LUA" anytime to activate me. Try it now!
             
             elif any(word in command_lower for word in ['message', 'sms', 'text']):
                 return self.handle_sms(command_text)
-            
-            elif any(word in command_lower for word in ['remind', 'reminder', 'alert']):
-                return self.handle_reminder(command_text)
             
             elif any(word in command_lower for word in ['music', 'play', 'song']):
                 return self.handle_music_control(command_text)
