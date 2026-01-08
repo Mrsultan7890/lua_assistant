@@ -43,8 +43,12 @@ jobs:
     - name: Fix Gradle Wrapper
       working-directory: ./flutter_app/android
       run: |
+        rm -rf gradle/wrapper
+        mkdir -p gradle/wrapper
+        curl -L https://services.gradle.org/distributions/gradle-8.0-bin.zip -o gradle-8.0-bin.zip
+        unzip -q gradle-8.0-bin.zip
+        gradle-8.0/bin/gradle wrapper --gradle-version=8.0
         chmod +x gradlew
-        ./gradlew wrapper --gradle-version=8.0
       
     - name: Build APK
       working-directory: ./flutter_app
