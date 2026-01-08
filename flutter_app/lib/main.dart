@@ -1126,13 +1126,13 @@ class _LuaHomePageState extends State<LuaHomePage>
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildQuickAction(Icons.phone, 'Call', () {
-                _processVoiceCommand('make a call');
+                _processVoiceCommand('call mom');
               }),
               _buildQuickAction(Icons.message, 'Message', () {
-                _processVoiceCommand('send a message');
+                _processVoiceCommand('send message to dad');
               }),
               _buildQuickAction(Icons.alarm, 'Reminder', () {
-                _processVoiceCommand('set a reminder');
+                _processVoiceCommand('set reminder for 5 PM');
               }),
               _buildQuickAction(Icons.music_note, 'Music', () {
                 _processVoiceCommand('play music');
@@ -1190,7 +1190,7 @@ class _LuaHomePageState extends State<LuaHomePage>
                       _startAlwaysListening();
                     }
                   } else {
-                    _showError('Speech not available. Use Test Speech or Diagnostics');
+                    _showError('Speech not available. Restart app or check permissions');
                   }
                 },
                 child: Container(
@@ -1260,184 +1260,12 @@ class _LuaHomePageState extends State<LuaHomePage>
               ),
             ],
           ),
-          
-          SizedBox(height: 12),
-          
-          // Test button for manual speech recognition
-          GestureDetector(
-            onTap: _testSpeechRecognition,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: Color(0xFFff9800),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(
-                  color: Color(0xFFff9800),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.mic_external_on, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Test Speech',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          SizedBox(height: 8),
-          
-          // Diagnostic button
-          GestureDetector(
-            onTap: _showDiagnostics,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Color(0xFF9c27b0),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'Diagnostics',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
   
-  void _showDiagnostics() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Color(0xFF1e2746),
-        title: Text(
-          'LUA Diagnostics',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('App Initialized: $_isInitialized', style: TextStyle(color: Colors.white)),
-            Text('Speech Available: $_speechAvailable', style: TextStyle(color: Colors.white)),
-            Text('Always Listening: $_isAlwaysListening', style: TextStyle(color: Colors.white)),
-            Text('Currently Listening: $_isListening', style: TextStyle(color: Colors.white)),
-            Text('Backend URL: $_backendUrl', style: TextStyle(color: Colors.white)),
-            SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _testBackgroundService();
-              },
-              child: Text('Test Background Service'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _reinitializeSpeech();
-              },
-              child: Text('Reinitialize Speech'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _checkPermissions();
-              },
-              child: Text('Check Permissions'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close', style: TextStyle(color: Color(0xFF00bcd4))),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Future<void> _testBackgroundService() async {
-    try {
-      const platform = MethodChannel('lua_assistant/system');
-      
-      // Test if background service is running
-      await platform.invokeMethod('startBackgroundService');
-      _showSuccess('Background service test completed - check notification');
-      
-      // Simulate wake word detection for testing
-      Timer(Duration(seconds: 2), () {
-        _handleBackgroundWakeWord();
-      });
-      
-    } catch (e) {
-      _showError('Background service test failed: $e');
-    }
-  }
-  
-  Future<void> _reinitializeSpeech() async {
-    print('Reinitializing speech recognition...');
-    setState(() {
-      _text = 'Reinitializing speech...';
-    });
-    
-    try {
-      await _speech.stop();
-      await Future.delayed(Duration(seconds: 1));
-      await _initializeSpeech();
-      _showSuccess('Speech reinitialized');
-    } catch (e) {
-      print('Reinitialization error: $e');
-      _showError('Reinitialization failed: $e');
-    }
-  }
-  
-  Future<void> _checkPermissions() async {
-    print('Checking permissions...');
-    
-    var micStatus = await Permission.microphone.status;
-    var phoneStatus = await Permission.phone.status;
-    
-    String permissionInfo = 'Microphone: $micStatus\nPhone: $phoneStatus';
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Color(0xFF1e2746),
-        title: Text('Permissions Status', style: TextStyle(color: Colors.white)),
-        content: Text(permissionInfo, style: TextStyle(color: Colors.white)),
-        actions: [
-          if (micStatus != PermissionStatus.granted)
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await Permission.microphone.request();
-                _checkPermissions();
-              },
-              child: Text('Request Mic', style: TextStyle(color: Color(0xFF00bcd4))),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close', style: TextStyle(color: Color(0xFF00bcd4))),
-          ),
-        ],
-      ),
-    );
-  }
-  
+
   void _showEmotionalResponse(Map<String, dynamic> emotion) {
     final String detectedEmotion = emotion['detected'] ?? 'neutral';
     final String emotionalResponse = emotion['emotional_response'] ?? '';
@@ -1528,85 +1356,5 @@ class _LuaHomePageState extends State<LuaHomePage>
     );
   }
   
-  Future<void> _testSpeechRecognition() async {
-    print('Testing speech recognition manually...');
-    
-    setState(() {
-      _text = 'Testing... Say something!';
-      _isListening = true;
-    });
-    
-    try {
-      if (!_speechAvailable) {
-        await _initializeSpeech();
-      }
-      
-      if (!_speechAvailable) {
-        _showError('Speech recognition not available');
-        setState(() {
-          _isListening = false;
-          _text = 'Speech not available';
-        });
-        return;
-      }
-      
-      print('Starting test listening...');
-      bool? started = await _speech.listen(
-        onResult: (result) {
-          print('Test result: ${result.recognizedWords}');
-          setState(() {
-            _text = 'Heard: ${result.recognizedWords}';
-          });
-          
-          if (result.finalResult) {
-            setState(() {
-              _isListening = false;
-            });
-            
-            String words = result.recognizedWords.toLowerCase();
-            if (words.contains('hey lua') || words.contains('hey lula')) {
-              _showSuccess('Wake word detected!');
-              _activateAssistant();
-            } else {
-              _showSuccess('Speech working! Try saying "Hey LUA"');
-              Timer(Duration(seconds: 2), () {
-                if (_speechAvailable) {
-                  _startAlwaysListening();
-                }
-              });
-            }
-          }
-        },
-        listenFor: Duration(seconds: 10),
-        pauseFor: Duration(seconds: 1),
-        partialResults: true,
-        onSoundLevelChange: (level) {
-          print('Test sound level: $level');
-          if (level > 0.1) {
-            print('Good sound detected: $level');
-          }
-        },
-      );
-      
-      // Handle null case properly
-      started = started ?? false;
-      
-      print('Test listening started: $started');
-      
-      if (!started) {
-        _showError('Failed to start test listening');
-        setState(() {
-          _isListening = false;
-          _text = 'Test failed to start';
-        });
-      }
-    } catch (e) {
-      print('Test speech error: $e');
-      _showError('Test failed: $e');
-      setState(() {
-        _isListening = false;
-        _text = 'Test error: $e';
-      });
-    }
-  }
+
 }
