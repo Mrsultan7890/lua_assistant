@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:async';
 
 void main() {
@@ -739,7 +738,6 @@ class _LuaHomePageState extends State<LuaHomePage>
       ),
     );
   }
-  }
   
   void _showEmotionalResponse(Map<String, dynamic> emotion) {
     final String detectedEmotion = emotion['detected'] ?? 'neutral';
@@ -747,15 +745,12 @@ class _LuaHomePageState extends State<LuaHomePage>
     final List<dynamic> suggestions = emotion['suggestions'] ?? [];
     
     if (detectedEmotion != 'neutral' && emotionalResponse.isNotEmpty) {
-      // Show emotional response in UI
       setState(() {
         _response = emotionalResponse;
       });
       
-      // Speak emotional response
       _speak(emotionalResponse);
       
-      // Show suggestions if available
       if (suggestions.isNotEmpty) {
         _showEmotionalSuggestions(suggestions.cast<String>());
       }
