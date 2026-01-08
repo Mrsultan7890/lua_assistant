@@ -10,10 +10,13 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.core.app.NotificationCompat
 import java.util.*
 
-class BackgroundService : Service() {
+class BackgroundService : Service(), RecognitionListener {
     
     companion object {
         const val CHANNEL_ID = "LUA_BACKGROUND_SERVICE"
@@ -23,12 +26,17 @@ class BackgroundService : Service() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var handler: Handler
     private lateinit var updateRunnable: Runnable
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
     
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         notificationManager = getSystemService(NotificationManager::class.java)
         handler = Handler(Looper.getMainLooper())
+        
+        // Initialize speech recognizer
+        initializeSpeechRecognizer()
         
         // Update notification every 30 minutes for theme change
         updateRunnable = object : Runnable {
@@ -38,6 +46,74 @@ class BackgroundService : Service() {
             }
         }
     }
+    
+    private fun initializeSpeechRecognizer() {
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(this)
+            startListening()
+        }
+    }
+    
+    private fun startListening() {
+        if (!isListening && speechRecognizer != null) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+            
+            try {
+                speechRecognizer?.startListening(intent)
+                isListening = true
+            } catch (e: Exception) {
+                // Retry after 3 seconds
+                handler.postDelayed({ startListening() }, 3000)
+            }
+        }
+    }
+    
+    override fun onResults(results: Bundle?) {
+        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        if (matches != null && matches.isNotEmpty()) {
+            val spokenText = matches[0].lowercase()
+            
+            // Check for wake word
+            if (spokenText.contains("hey lua") || 
+                spokenText.contains("hey lula") ||
+                spokenText.contains("hey loo")) {
+                
+                // Wake word detected - open app
+                val intent = Intent(this, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("wake_word_detected", true)
+                }
+                startActivity(intent)
+            }
+        }
+        
+        // Restart listening
+        isListening = false
+        handler.postDelayed({ startListening() }, 1000)
+    }
+    
+    override fun onPartialResults(partialResults: Bundle?) {
+        // Handle partial results if needed
+    }
+    
+    override fun onError(error: Int) {
+        isListening = false
+        // Restart listening after error
+        handler.postDelayed({ startListening() }, 2000)
+    }
+    
+    override fun onReadyForSpeech(params: Bundle?) {}
+    override fun onBeginningOfSpeech() {}
+    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onEndOfSpeech() {}
+    override fun onEvent(eventType: Int, params: Bundle?) {}
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = createNotification()
@@ -52,6 +128,8 @@ class BackgroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(updateRunnable)
+        speechRecognizer?.destroy()
+        speechRecognizer = null
     }
     
     override fun onBind(intent: Intent?): IBinder? {
@@ -115,7 +193,7 @@ class BackgroundService : Service() {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "$content\n\n🎤 Always listening for voice commands\n📱 Tap to open LUA Assistant"
+                "$content\n\n🎤 Always listening for voice commands\n📱 Tap to open LUA Assistant\n🔊 Say 'Hey LUA' to activate"
             ))
             .build()
     }

@@ -119,11 +119,40 @@ class _LuaHomePageState extends State<LuaHomePage>
   Future<void> _startBackgroundService() async {
     try {
       const platform = MethodChannel('lua_assistant/system');
+      
+      // Set up wake word detection listener
+      platform.setMethodCallHandler((call) async {
+        if (call.method == 'wakeWordDetected') {
+          print('Wake word detected by background service!');
+          _handleBackgroundWakeWord();
+        }
+      });
+      
       await platform.invokeMethod('startBackgroundService');
       await platform.invokeMethod('requestBatteryOptimization');
     } catch (e) {
       print('Background service error: $e');
     }
+  }
+  
+  void _handleBackgroundWakeWord() {
+    print('Handling background wake word detection...');
+    
+    // Activate assistant immediately
+    if (mounted) {
+      setState(() {
+        _text = 'LUA activated from background! What can I do for you?';
+        _response = '';
+      });
+    }
+    
+    // Speak activation message
+    _speak('Yes, I\'m here! How can I help you?');
+    
+    // Start listening for command after a short delay
+    Timer(Duration(seconds: 2), () {
+      _listenForCommand();
+    });
   }
   
   Future<void> _requestPermissions() async {
