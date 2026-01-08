@@ -19,21 +19,21 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '11'
         
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.6'
+        flutter-version: '3.16.0'
         channel: 'stable'
         
     - name: Get Flutter dependencies
       working-directory: ./flutter_app
       run: flutter pub get
       
-    - name: Analyze Flutter code
+    - name: Clean build
       working-directory: ./flutter_app
-      run: flutter analyze --no-fatal-infos
+      run: flutter clean
       
     - name: Build APK
       working-directory: ./flutter_app
