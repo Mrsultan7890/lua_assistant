@@ -47,11 +47,65 @@ class _LauncherHomeScreenState extends State<LauncherHomeScreen> {
   }
 
   Future<void> _toggleLauncher() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isLauncherEnabled = !isLauncherEnabled;
-    });
-    await prefs.setBool('launcher_enabled', isLauncherEnabled);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: widget.themeColors['background'][0],
+        title: Text(
+          'LUA Launcher Settings',
+          style: TextStyle(color: widget.themeColors['text']),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Choose launcher mode:',
+              style: TextStyle(color: widget.themeColors['text']),
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('launcher_enabled', false);
+                      Navigator.pop(context);
+                      setState(() {
+                        isLauncherEnabled = false;
+                      });
+                      // Open default launcher selector
+                      try {
+                        const platform = MethodChannel('lua_assistant/system');
+                        await platform.invokeMethod('openLauncherSelector');
+                      } catch (e) {
+                        print('Launcher selector error: $e');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
+                    child: Text('Disable\nLauncher', textAlign: TextAlign.center),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.themeColors['accent'],
+                    ),
+                    child: Text('Keep\nEnabled', textAlign: TextAlign.center),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _updateTime() {
@@ -290,49 +344,144 @@ class _LauncherHomeScreenState extends State<LauncherHomeScreen> {
   Widget _buildBottomDock() {
     final dockApps = installedApps.take(4).toList();
     
-    return Container(
-      margin: EdgeInsets.all(16),
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            widget.themeColors['background'][0].withOpacity(0.9),
-            widget.themeColors['background'][1].withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(
-          color: widget.themeColors['text'].withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: dockApps.map((app) => GestureDetector(
-          onTap: () => _openApp(app['package']),
-          child: Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  widget.themeColors['accent'].withOpacity(0.3),
-                  widget.themeColors['accent'].withOpacity(0.1),
-                ],
-              ),
+    return Column(
+      children: [
+        // Navigation buttons
+        Container(
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                widget.themeColors['background'][0].withOpacity(0.8),
+                widget.themeColors['background'][1].withOpacity(0.7),
+              ],
             ),
-            child: Icon(
-              app['icon'] ?? Icons.apps,
-              color: widget.themeColors['text'],
-              size: 24,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.themeColors['text'].withOpacity(0.2),
+              width: 1,
             ),
           ),
-        )).toList(),
-      ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  // Back button
+                  SystemNavigator.pop();
+                },
+                child: Container(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.arrow_back,
+                    color: widget.themeColors['text'],
+                    size: 24,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  // Home button - already on home
+                },
+                child: Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.themeColors['accent'].withOpacity(0.3),
+                  ),
+                  child: Icon(
+                    Icons.home,
+                    color: widget.themeColors['accent'],
+                    size: 24,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  // Recent apps
+                  _showRecentApps();
+                },
+                child: Container(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.apps,
+                    color: widget.themeColors['text'],
+                    size: 24,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _toggleLauncher,
+                child: Container(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.settings,
+                    color: widget.themeColors['text'],
+                    size: 24,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // App dock
+        Container(
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                widget.themeColors['background'][0].withOpacity(0.9),
+                widget.themeColors['background'][1].withOpacity(0.8),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color: widget.themeColors['text'].withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: dockApps.map((app) => GestureDetector(
+              onTap: () => _openApp(app['package']),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      widget.themeColors['accent'].withOpacity(0.3),
+                      widget.themeColors['accent'].withOpacity(0.1),
+                    ],
+                  ),
+                ),
+                child: Icon(
+                  app['icon'] ?? Icons.apps,
+                  color: widget.themeColors['text'],
+                  size: 24,
+                ),
+              ),
+            )).toList(),
+          ),
+        ),
+      ],
     );
   }
 
+  void _showRecentApps() {
+    // Show recent apps - Android system call
+    try {
+      const platform = MethodChannel('lua_assistant/system');
+      platform.invokeMethod('showRecentApps');
+    } catch (e) {
+      print('Recent apps error: $e');
+    }
+  }
+  
   String _getGreeting() {
     final hour = DateTime.now().hour;
     switch (widget.currentTheme) {

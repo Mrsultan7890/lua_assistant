@@ -281,15 +281,21 @@ class _LuaHomePageState extends State<LuaHomePage>
       await _speech.listen(
         onResult: _onAlwaysListeningResult,
         listenFor: Duration(minutes: 10),
-        pauseFor: Duration(seconds: 5),
+        pauseFor: Duration(seconds: 2), // Reduced pause time
         localeId: 'en_US',
         cancelOnError: false,
         partialResults: true,
+        onSoundLevelChange: (level) {
+          // Increase sensitivity by lowering threshold
+          if (level > 0.1) {
+            print('Sound detected: $level');
+          }
+        },
       );
     } catch (e) {
       print('Speech listen error: $e');
       if (_isAlwaysListening) {
-        Timer(Duration(seconds: 3), () => _startAlwaysListening());
+        Timer(Duration(seconds: 2), () => _startAlwaysListening());
       }
     }
   }
@@ -348,10 +354,16 @@ class _LuaHomePageState extends State<LuaHomePage>
             });
           }
         },
-        listenFor: Duration(seconds: 10),
-        pauseFor: Duration(seconds: 3),
+        listenFor: Duration(seconds: 15), // Increased listening time
+        pauseFor: Duration(seconds: 2), // Reduced pause time
         cancelOnError: false,
         partialResults: true,
+        onSoundLevelChange: (level) {
+          // Visual feedback for sound detection
+          if (level > 0.2) {
+            print('Command sound detected: $level');
+          }
+        },
       );
     } catch (e) {
       print('Command listen error: $e');

@@ -40,6 +40,12 @@ class MainActivity: FlutterActivity() {
                 "getInstalledApps" -> {
                     getInstalledApps(result)
                 }
+                "showRecentApps" -> {
+                    showRecentApps(result)
+                }
+                "openLauncherSelector" -> {
+                    openLauncherSelector(result)
+                }
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
                 }
@@ -147,6 +153,40 @@ class MainActivity: FlutterActivity() {
             result.success(appList)
         } catch (e: Exception) {
             result.error("GET_APPS_ERROR", "Failed to get installed apps: ${e.message}", null)
+        }
+    }
+    
+    private fun showRecentApps(result: MethodChannel.Result) {
+        try {
+            val intent = Intent("android.intent.action.SHOW_RECENT_APPS")
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            result.success("Recent apps shown")
+        } catch (e: Exception) {
+            // Fallback method
+            try {
+                val intent = Intent()
+                intent.component = android.content.ComponentName(
+                    "com.android.systemui",
+                    "com.android.systemui.recent.RecentsActivity"
+                )
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                startActivity(intent)
+                result.success("Recent apps shown (fallback)")
+            } catch (e2: Exception) {
+                result.error("RECENT_APPS_ERROR", "Failed to show recent apps: ${e2.message}", null)
+            }
+        }
+    }
+    
+    private fun openLauncherSelector(result: MethodChannel.Result) {
+        try {
+            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            result.success("Launcher selector opened")
+        } catch (e: Exception) {
+            result.error("LAUNCHER_SELECTOR_ERROR", "Failed to open launcher selector: ${e.message}", null)
         }
     }
     
