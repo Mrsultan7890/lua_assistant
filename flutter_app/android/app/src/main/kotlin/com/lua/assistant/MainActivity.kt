@@ -37,14 +37,8 @@ class MainActivity: FlutterActivity() {
                 "hideFloatingIndicator" -> {
                     hideFloatingIndicator(result)
                 }
-                "getInstalledApps" -> {
-                    getInstalledApps(result)
-                }
                 "showRecentApps" -> {
                     showRecentApps(result)
-                }
-                "openLauncherSelector" -> {
-                    openLauncherSelector(result)
                 }
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
@@ -132,30 +126,6 @@ class MainActivity: FlutterActivity() {
         }
     }
     
-    private fun getInstalledApps(result: MethodChannel.Result) {
-        try {
-            val apps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-            val appList = mutableListOf<Map<String, Any>>()
-            
-            for (app in apps) {
-                val launchIntent = packageManager.getLaunchIntentForPackage(app.packageName)
-                if (launchIntent != null && app.packageName != packageName) {
-                    appList.add(mapOf(
-                        "name" to app.loadLabel(packageManager).toString(),
-                        "package" to app.packageName
-                    ))
-                }
-            }
-            
-            // Sort by name
-            appList.sortBy { it["name"] as String }
-            
-            result.success(appList)
-        } catch (e: Exception) {
-            result.error("GET_APPS_ERROR", "Failed to get installed apps: ${e.message}", null)
-        }
-    }
-    
     private fun showRecentApps(result: MethodChannel.Result) {
         try {
             val intent = Intent("android.intent.action.SHOW_RECENT_APPS")
@@ -176,17 +146,6 @@ class MainActivity: FlutterActivity() {
             } catch (e2: Exception) {
                 result.error("RECENT_APPS_ERROR", "Failed to show recent apps: ${e2.message}", null)
             }
-        }
-    }
-    
-    private fun openLauncherSelector(result: MethodChannel.Result) {
-        try {
-            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            startActivity(intent)
-            result.success("Launcher selector opened")
-        } catch (e: Exception) {
-            result.error("LAUNCHER_SELECTOR_ERROR", "Failed to open launcher selector: ${e.message}", null)
         }
     }
     
