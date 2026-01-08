@@ -7,11 +7,8 @@ import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:async';
-import 'dart:io';
 
 void main() {
   runApp(LuaApp());
@@ -60,12 +57,6 @@ class _LuaHomePageState extends State<LuaHomePage>
   String _text = 'Say "Hey LUA" to activate';
   String _response = '';
   double _confidence = 1.0;
-  
-  // Music & Voice features
-  bool _isPlaying = false;
-  String _currentTrack = 'No track playing';
-  List<String> _availableVoices = ['default'];
-  String _selectedVoice = 'default';
   
   // Animation controllers
   late AnimationController _pulseController;
@@ -356,131 +347,9 @@ class _LuaHomePageState extends State<LuaHomePage>
   
   Future<void> _speak(String text) async {
     try {
-      if (_selectedVoice != 'default') {
-        await _generateVoice(text);
-      } else {
-        await _flutterTts.speak(text);
-      }
+      await _flutterTts.speak(text);
     } catch (e) {
       print('TTS error: $e');
-    }
-  }
-  
-  // Music Control Methods
-  Future<void> _playMusic([String? query]) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_backendUrl/api/music/play'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'query': query ?? ''}),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() {
-          _isPlaying = data['success'];
-          _currentTrack = data['message'] ?? 'Playing music';
-        });
-        _speak(data['message'] ?? 'Playing music');
-      }
-    } catch (e) {
-      print('Play music error: $e');
-    }
-  }
-  
-  Future<void> _controlMusic(String action) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_backendUrl/api/music/control'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'action': action}),
-      );
-      
-      if (response.statusCode == 200) {
-        setState(() {
-          if (action == 'pause') _isPlaying = false;
-          if (action == 'play') _isPlaying = true;
-        });
-        _speak('Music $action');
-      }
-    } catch (e) {
-      print('Music control error: $e');
-    }
-  }
-  
-  // Voice Cloning Methods
-  Future<void> _cloneVoice() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-      );
-      
-      if (result != null) {
-        File file = File(result.files.single.path!);
-        
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('$_backendUrl/api/voice/clone'),
-        );
-        
-        request.files.add(await http.MultipartFile.fromPath('audio', file.path));
-        request.fields['user_id'] = _userId;
-        
-        var response = await request.send();
-        
-        if (response.statusCode == 200) {
-          _speak('Voice cloned successfully!');
-          _loadAvailableVoices();
-        }
-      }
-    } catch (e) {
-      print('Voice cloning error: $e');
-    }
-  }
-  
-  Future<void> _loadAvailableVoices() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_backendUrl/api/voice/list'),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          setState(() {
-            _availableVoices = ['default'];
-            _availableVoices.addAll(
-              List<String>.from(data['voices']['cloned_voices'] ?? [])
-            );
-          });
-        }
-      }
-    } catch (e) {
-      print('Load voices error: $e');
-    }
-  }
-  
-  Future<void> _generateVoice(String text) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_backendUrl/api/voice/generate'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'text': text,
-          'voice_id': _selectedVoice,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final tempDir = await getTemporaryDirectory();
-        final audioFile = File('${tempDir.path}/generated_speech.wav');
-        await audioFile.writeAsBytes(response.bodyBytes);
-        
-        final player = AudioPlayer();
-        await player.play(DeviceFileSource(audioFile.path));
-      }
-    } catch (e) {
-      print('Voice generation error: $e');
     }
   }
   
@@ -553,7 +422,6 @@ class _LuaHomePageState extends State<LuaHomePage>
             children: [
               _buildHeader(),
               Expanded(child: _buildVoiceInterface()),
-              _buildMusicControls(),
               _buildQuickActions(),
               _buildControlPanel(),
             ],
@@ -758,10 +626,7 @@ class _LuaHomePageState extends State<LuaHomePage>
                 _processVoiceCommand('set a reminder');
               }),
               _buildQuickAction(Icons.music_note, 'Music', () {
-                _playMusic();
-              }),
-              _buildQuickAction(Icons.record_voice_over, 'Voice', () {
-                _cloneVoice();
+                _processVoiceCommand('play music');
               }),
             ],
           ),
@@ -874,51 +739,6 @@ class _LuaHomePageState extends State<LuaHomePage>
       ),
     );
   }
-  
-  Widget _buildMusicControls() {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 10),
-      padding: EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Music Player',
-            style: TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            _currentTrack,
-            style: TextStyle(color: Colors.white70),
-          ),
-          SizedBox(height: 15),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                onPressed: () => _controlMusic('previous'),
-                icon: Icon(Icons.skip_previous, color: Colors.cyanAccent),
-              ),
-              IconButton(
-                onPressed: () => _controlMusic(_isPlaying ? 'pause' : 'play'),
-                icon: Icon(
-                  _isPlaying ? Icons.pause : Icons.play_arrow,
-                  color: Colors.cyanAccent,
-                  size: 40,
-                ),
-              ),
-              IconButton(
-                onPressed: () => _controlMusic('next'),
-                icon: Icon(Icons.skip_next, color: Colors.cyanAccent),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
   
   void _showEmotionalResponse(Map<String, dynamic> emotion) {
