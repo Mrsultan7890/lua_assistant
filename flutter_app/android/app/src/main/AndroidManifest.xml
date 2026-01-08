@@ -62,6 +62,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
         
+        <!-- Floating Indicator Service -->
+        <service
+            android:name=".FloatingIndicatorService"
+            android:enabled="true"
+            android:exported="false" />
+        
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -31,6 +31,12 @@ class MainActivity: FlutterActivity() {
                 "stopBackgroundService" -> {
                     stopBackgroundService(result)
                 }
+                "showFloatingIndicator" -> {
+                    showFloatingIndicator(result)
+                }
+                "hideFloatingIndicator" -> {
+                    hideFloatingIndicator(result)
+                }
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
                 }
@@ -92,6 +98,28 @@ class MainActivity: FlutterActivity() {
             result.success("Background service stopped")
         } catch (e: Exception) {
             result.error("SERVICE_ERROR", "Failed to stop background service: ${e.message}", null)
+        }
+    }
+    
+    private fun showFloatingIndicator(result: MethodChannel.Result) {
+        try {
+            val serviceIntent = Intent(this, FloatingIndicatorService::class.java)
+            serviceIntent.action = "SHOW_INDICATOR"
+            startService(serviceIntent)
+            result.success("Floating indicator shown")
+        } catch (e: Exception) {
+            result.error("INDICATOR_ERROR", "Failed to show floating indicator: ${e.message}", null)
+        }
+    }
+    
+    private fun hideFloatingIndicator(result: MethodChannel.Result) {
+        try {
+            val serviceIntent = Intent(this, FloatingIndicatorService::class.java)
+            serviceIntent.action = "HIDE_INDICATOR"
+            startService(serviceIntent)
+            result.success("Floating indicator hidden")
+        } catch (e: Exception) {
+            result.error("INDICATOR_ERROR", "Failed to hide floating indicator: ${e.message}", null)
         }
     }
     
