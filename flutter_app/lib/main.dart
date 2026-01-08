@@ -105,31 +105,24 @@ class _LuaHomePageState extends State<LuaHomePage>
       _isInitialized = true;
     });
     
-    // Start background service first
+    // Start background service for notification only
     await _startBackgroundService();
     
-    // Don't auto-start Flutter speech recognition - let background service handle wake word
-    print('App initialized. Background service will handle wake word detection.');
-    setState(() {
-      _text = 'LUA is ready! Background service listening for "Hey LUA"';
-      _isAlwaysListening = false; // Let background service handle this
-    });
+    // Auto-start Flutter speech recognition if available
+    if (_speechAvailable) {
+      print('Starting always listening mode...');
+      _startAlwaysListening();
+    } else {
+      print('Speech not available');
+    }
   }
   
   Future<void> _startBackgroundService() async {
     try {
       const platform = MethodChannel('lua_assistant/system');
-      
-      // Set up wake word detection listener
-      platform.setMethodCallHandler((call) async {
-        if (call.method == 'wakeWordDetected') {
-          print('Wake word detected by background service!');
-          _handleBackgroundWakeWord();
-        }
-      });
-      
       await platform.invokeMethod('startBackgroundService');
       await platform.invokeMethod('requestBatteryOptimization');
+      print('Background service started for notification');
     } catch (e) {
       print('Background service error: $e');
     }
@@ -333,18 +326,15 @@ class _LuaHomePageState extends State<LuaHomePage>
   void _onSpeechStatus(String status) {
     print('Speech status: $status');
     
-    // Don't auto-restart if background service is handling wake word detection
+    // Auto-restart listening if it stops unexpectedly
     if (status == 'notListening' && _isAlwaysListening) {
-      print('Speech stopped, but background service should handle wake word detection');
-      // Only restart if we're in active command listening mode
-      if (_text.contains('Listening for your command')) {
-        Timer(Duration(seconds: 1), () {
-          if (_isAlwaysListening && !_isListening) {
-            print('Restarting command listening...');
-            _startAlwaysListening();
-          }
-        });
-      }
+      print('Speech stopped, restarting in 1 second...');
+      Timer(Duration(seconds: 1), () {
+        if (_isAlwaysListening && !_isListening) {
+          print('Restarting always listening...');
+          _startAlwaysListening();
+        }
+      });
     }
   }
   
@@ -1200,18 +1190,20 @@ class _LuaHomePageState extends State<LuaHomePage>
             children: [
               GestureDetector(
                 onTap: () {
-                  // Manual toggle for testing - background service handles actual wake word
-                  if (_isAlwaysListening) {
-                    _stopAlwaysListening();
+                  if (_speechAvailable) {
+                    if (_isAlwaysListening) {
+                      _stopAlwaysListening();
+                    } else {
+                      _startAlwaysListening();
+                    }
                   } else {
-                    // Show that background service is active
-                    _showSuccess('Background service is handling wake word detection');
+                    _showError('Speech not available. Use Test Speech or Diagnostics');
                   }
                 },
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Color(0xFF00bcd4), // Always show as active since background service handles it
+                    color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(
                       color: Color(0xFF00bcd4),
@@ -1221,15 +1213,23 @@ class _LuaHomePageState extends State<LuaHomePage>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.hearing,
-                        color: Colors.white,
+                        _speechAvailable 
+                            ? (_isAlwaysListening ? Icons.hearing : Icons.hearing_disabled)
+                            : Icons.error,
+                        color: _speechAvailable 
+                            ? (_isAlwaysListening ? Colors.white : Color(0xFF00bcd4))
+                            : Colors.red,
                         size: 20,
                       ),
                       SizedBox(width: 8),
                       Text(
-                        'Background Active',
+                        _speechAvailable 
+                            ? (_isAlwaysListening ? 'Always On' : 'Tap to Wake')
+                            : 'Speech Error',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: _speechAvailable 
+                              ? (_isAlwaysListening ? Colors.white : Color(0xFF00bcd4))
+                              : Colors.red,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1347,6 +1347,13 @@ class _LuaHomePageState extends State<LuaHomePage>
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(context);
+                await _testBackgroundService();
+              },
+              child: Text('Test Background Service'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
                 await _reinitializeSpeech();
               },
               child: Text('Reinitialize Speech'),
@@ -1368,6 +1375,24 @@ class _LuaHomePageState extends State<LuaHomePage>
         ],
       ),
     );
+  }
+  
+  Future<void> _testBackgroundService() async {
+    try {
+      const platform = MethodChannel('lua_assistant/system');
+      
+      // Test if background service is running
+      await platform.invokeMethod('startBackgroundService');
+      _showSuccess('Background service test completed - check notification');
+      
+      // Simulate wake word detection for testing
+      Timer(Duration(seconds: 2), () {
+        _handleBackgroundWakeWord();
+      });
+      
+    } catch (e) {
+      _showError('Background service test failed: $e');
+    }
   }
   
   Future<void> _reinitializeSpeech() async {
