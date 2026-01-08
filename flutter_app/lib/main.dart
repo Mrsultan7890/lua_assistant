@@ -146,16 +146,16 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Future<void> _initializeSpeech() async {
-    _speech = stt.SpeechToText();
-    print('Initializing speech recognition...');
-    
     try {
-      bool available = await _speech.initialize(
+      _speech = stt.SpeechToText();
+      print('Initializing speech recognition...');
+      
+      bool? available = await _speech.initialize(
         onStatus: _onSpeechStatus,
         onError: _onSpeechError,
       );
       
-      // Handle null case
+      // Handle null case properly
       available = available ?? false;
       
       print('Speech recognition available: $available');
@@ -347,7 +347,7 @@ class _LuaHomePageState extends State<LuaHomePage>
     
     try {
       print('Starting speech recognition...');
-      bool started = await _speech.listen(
+      bool? started = await _speech.listen(
         onResult: _onAlwaysListeningResult,
         listenFor: Duration(minutes: 10),
         pauseFor: Duration(seconds: 1),
@@ -361,7 +361,7 @@ class _LuaHomePageState extends State<LuaHomePage>
         },
       );
       
-      // Handle null case
+      // Handle null case properly
       started = started ?? false;
       
       print('Speech listen started: $started');
@@ -1504,7 +1504,7 @@ class _LuaHomePageState extends State<LuaHomePage>
       }
       
       print('Starting test listening...');
-      bool started = await _speech.listen(
+      bool? started = await _speech.listen(
         onResult: (result) {
           print('Test result: ${result.recognizedWords}');
           setState(() {
@@ -1541,7 +1541,7 @@ class _LuaHomePageState extends State<LuaHomePage>
         },
       );
       
-      // Handle null case
+      // Handle null case properly
       started = started ?? false;
       
       print('Test listening started: $started');
