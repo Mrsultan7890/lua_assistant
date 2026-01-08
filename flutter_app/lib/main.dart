@@ -136,7 +136,7 @@ class _LuaHomePageState extends State<LuaHomePage>
   
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    _backendUrl = prefs.getString('backend_url') ?? 'https://your-railway-app.railway.app';
+    _backendUrl = prefs.getString('backend_url') ?? 'https://socialcoddy.run.place';
     _userId = prefs.getString('user_id') ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
     _totalCommands = prefs.getInt('total_commands') ?? 0;
     
