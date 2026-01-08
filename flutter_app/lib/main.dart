@@ -67,7 +67,7 @@ class _LuaHomePageState extends State<LuaHomePage>
   late Timer _themeTimer;
   String _currentTheme = 'night'; // night, dawn, day, dusk
   
-  # Backend configuration
+  // Backend configuration
   String _backendUrl = 'https://socialcoddy.run.place';
   String _userId = 'default';
   
