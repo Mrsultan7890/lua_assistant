@@ -1,1 +1,184 @@
-import subprocess\nimport os\nimport platform\nimport json\nimport requests\nfrom datetime import datetime, timedelta\nimport sqlite3\n\nclass DeviceIntegration:\n    def __init__(self):\n        self.system = platform.system().lower()\n        self.android_packages = {\n            'whatsapp': 'com.whatsapp',\n            'instagram': 'com.instagram.android',\n            'youtube': 'com.google.android.youtube',\n            'facebook': 'com.facebook.katana',\n            'twitter': 'com.twitter.android',\n            'telegram': 'org.telegram.messenger',\n            'chrome': 'com.android.chrome',\n            'gmail': 'com.google.android.gm',\n            'maps': 'com.google.android.apps.maps',\n            'spotify': 'com.spotify.music',\n            'netflix': 'com.netflix.mediaclient',\n            'amazon': 'in.amazon.mShop.android.shopping',\n            'flipkart': 'com.flipkart.android',\n            'paytm': 'net.one97.paytm',\n            'phonepe': 'com.phonepe.app',\n            'gpay': 'com.google.android.apps.nbu.paisa.user'\n        }\n        \n    def launch_app(self, app_name, package_name=None):\n        \"\"\"Launch application on device\"\"\"\n        try:\n            if self.system == 'android' or package_name:\n                return self._launch_android_app(package_name or app_name)\n            elif self.system == 'windows':\n                return self._launch_windows_app(app_name)\n            elif self.system == 'darwin':  # macOS\n                return self._launch_macos_app(app_name)\n            elif self.system == 'linux':\n                return self._launch_linux_app(app_name)\n            else:\n                return {'success': False, 'error': 'Unsupported platform'}\n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def _launch_android_app(self, package_name):\n        \"\"\"Launch Android app using ADB\"\"\"\n        try:\n            # Check if ADB is available\n            result = subprocess.run(['adb', 'devices'], capture_output=True, text=True)\n            if result.returncode != 0:\n                return {'success': False, 'error': 'ADB not available'}\n            \n            # Launch app\n            cmd = ['adb', 'shell', 'am', 'start', '-n', f'{package_name}/.MainActivity']\n            result = subprocess.run(cmd, capture_output=True, text=True)\n            \n            if result.returncode == 0:\n                return {'success': True, 'message': f'Launched {package_name}'}\n            else:\n                # Try alternative launch method\n                cmd = ['adb', 'shell', 'monkey', '-p', package_name, '1']\n                result = subprocess.run(cmd, capture_output=True, text=True)\n                \n                if result.returncode == 0:\n                    return {'success': True, 'message': f'Launched {package_name}'}\n                else:\n                    return {'success': False, 'error': f'Failed to launch {package_name}'}\n                    \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def _launch_windows_app(self, app_name):\n        \"\"\"Launch Windows application\"\"\"\n        try:\n            windows_apps = {\n                'chrome': 'chrome.exe',\n                'firefox': 'firefox.exe',\n                'notepad': 'notepad.exe',\n                'calculator': 'calc.exe',\n                'camera': 'microsoft.windows.camera:',\n                'settings': 'ms-settings:',\n                'store': 'ms-windows-store:'\n            }\n            \n            if app_name.lower() in windows_apps:\n                app_path = windows_apps[app_name.lower()]\n                \n                if app_path.startswith('ms-'):\n                    # UWP app\n                    subprocess.run(['start', app_path], shell=True)\n                else:\n                    # Regular executable\n                    subprocess.run([app_path])\n                \n                return {'success': True, 'message': f'Launched {app_name}'}\n            else:\n                return {'success': False, 'error': f'App {app_name} not found'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def _launch_macos_app(self, app_name):\n        \"\"\"Launch macOS application\"\"\"\n        try:\n            macos_apps = {\n                'safari': 'Safari',\n                'chrome': 'Google Chrome',\n                'firefox': 'Firefox',\n                'calculator': 'Calculator',\n                'camera': 'Photo Booth',\n                'settings': 'System Preferences',\n                'music': 'Music',\n                'photos': 'Photos'\n            }\n            \n            app_name_clean = app_name.lower()\n            if app_name_clean in macos_apps:\n                app_path = macos_apps[app_name_clean]\n                subprocess.run(['open', '-a', app_path])\n                return {'success': True, 'message': f'Launched {app_name}'}\n            else:\n                return {'success': False, 'error': f'App {app_name} not found'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def _launch_linux_app(self, app_name):\n        \"\"\"Launch Linux application\"\"\"\n        try:\n            linux_apps = {\n                'firefox': 'firefox',\n                'chrome': 'google-chrome',\n                'calculator': 'gnome-calculator',\n                'camera': 'cheese',\n                'settings': 'gnome-control-center',\n                'files': 'nautilus',\n                'terminal': 'gnome-terminal'\n            }\n            \n            app_name_clean = app_name.lower()\n            if app_name_clean in linux_apps:\n                app_command = linux_apps[app_name_clean]\n                subprocess.run([app_command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n                return {'success': True, 'message': f'Launched {app_name}'}\n            else:\n                return {'success': False, 'error': f'App {app_name} not found'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def make_call(self, contact_name=None, phone_number=None):\n        \"\"\"Initiate phone call\"\"\"\n        try:\n            if phone_number:\n                # Direct phone number\n                if self.system == 'android':\n                    cmd = ['adb', 'shell', 'am', 'start', '-a', 'android.intent.action.CALL', '-d', f'tel:{phone_number}']\n                    result = subprocess.run(cmd, capture_output=True, text=True)\n                    \n                    if result.returncode == 0:\n                        return {'success': True, 'message': f'Calling {phone_number}'}\n                    else:\n                        return {'success': False, 'error': 'Failed to make call'}\n                else:\n                    return {'success': False, 'error': 'Calling not supported on this platform'}\n            \n            elif contact_name:\n                # Contact name - would need contact lookup\n                return {'success': False, 'error': 'Contact lookup not implemented yet'}\n            \n            else:\n                return {'success': False, 'error': 'No contact or number provided'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def send_sms(self, contact_name=None, phone_number=None, message=\"\"):\n        \"\"\"Send SMS message\"\"\"\n        try:\n            if phone_number and message:\n                if self.system == 'android':\n                    # Escape message for shell\n                    escaped_message = message.replace('\"', '\\\\\"').replace(\"'\", \"\\\\'\").replace(' ', '\\\\ ')\n                    \n                    cmd = [\n                        'adb', 'shell', 'am', 'start',\n                        '-a', 'android.intent.action.SENDTO',\n                        '-d', f'sms:{phone_number}',\n                        '--es', 'sms_body', message\n                    ]\n                    \n                    result = subprocess.run(cmd, capture_output=True, text=True)\n                    \n                    if result.returncode == 0:\n                        return {'success': True, 'message': f'SMS sent to {phone_number}'}\n                    else:\n                        return {'success': False, 'error': 'Failed to send SMS'}\n                else:\n                    return {'success': False, 'error': 'SMS not supported on this platform'}\n            \n            else:\n                return {'success': False, 'error': 'Phone number and message required'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def control_camera(self, mode='default'):\n        \"\"\"Control device camera\"\"\"\n        try:\n            if self.system == 'android':\n                if mode == 'front':\n                    cmd = ['adb', 'shell', 'am', 'start', '-a', 'android.media.action.IMAGE_CAPTURE', '--ei', 'android.intent.extras.CAMERA_FACING', '1']\n                else:\n                    cmd = ['adb', 'shell', 'am', 'start', '-a', 'android.media.action.IMAGE_CAPTURE']\n                \n                result = subprocess.run(cmd, capture_output=True, text=True)\n                \n                if result.returncode == 0:\n                    return {'success': True, 'message': f'Camera opened in {mode} mode'}\n                else:\n                    return {'success': False, 'error': 'Failed to open camera'}\n            \n            else:\n                # Try to launch camera app on other platforms\n                return self.launch_app('camera')\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def control_music(self, action, song=None, artist=None):\n        \"\"\"Control music playback\"\"\"\n        try:\n            if self.system == 'android':\n                if action == 'play_music':\n                    if song:\n                        # Search and play specific song\n                        cmd = ['adb', 'shell', 'am', 'start', '-a', 'android.media.action.MEDIA_PLAY_FROM_SEARCH', '--es', 'query', song]\n                    else:\n                        # Just play music\n                        cmd = ['adb', 'shell', 'input', 'keyevent', 'KEYCODE_MEDIA_PLAY']\n                \n                elif action == 'pause_music':\n                    cmd = ['adb', 'shell', 'input', 'keyevent', 'KEYCODE_MEDIA_PAUSE']\n                \n                elif action == 'next_track':\n                    cmd = ['adb', 'shell', 'input', 'keyevent', 'KEYCODE_MEDIA_NEXT']\n                \n                elif action == 'previous_track':\n                    cmd = ['adb', 'shell', 'input', 'keyevent', 'KEYCODE_MEDIA_PREVIOUS']\n                \n                elif action == 'volume_up':\n                    cmd = ['adb', 'shell', 'input', 'keyevent', 'KEYCODE_VOLUME_UP']\n                \n                elif action == 'volume_down':\n                    cmd = ['adb', 'shell', 'input', 'keyevent', 'KEYCODE_VOLUME_DOWN']\n                \n                else:\n                    return {'success': False, 'error': f'Unknown music action: {action}'}\n                \n                result = subprocess.run(cmd, capture_output=True, text=True)\n                \n                if result.returncode == 0:\n                    return {'success': True, 'message': f'Music {action} executed'}\n                else:\n                    return {'success': False, 'error': f'Failed to execute {action}'}\n            \n            else:\n                return {'success': False, 'error': 'Music control not supported on this platform'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def set_reminder(self, title, time_str):\n        \"\"\"Set device reminder/alarm\"\"\"\n        try:\n            # Parse time string to get actual time\n            reminder_time = self._parse_time_string(time_str)\n            \n            if self.system == 'android':\n                # Set alarm using Android intent\n                cmd = [\n                    'adb', 'shell', 'am', 'start',\n                    '-a', 'android.intent.action.SET_ALARM',\n                    '--es', 'android.intent.extra.alarm.MESSAGE', title,\n                    '--ei', 'android.intent.extra.alarm.HOUR', str(reminder_time.hour),\n                    '--ei', 'android.intent.extra.alarm.MINUTES', str(reminder_time.minute)\n                ]\n                \n                result = subprocess.run(cmd, capture_output=True, text=True)\n                \n                if result.returncode == 0:\n                    return {'success': True, 'message': f'Reminder set: {title} at {reminder_time.strftime(\"%H:%M\")}'}\n                else:\n                    return {'success': False, 'error': 'Failed to set reminder'}\n            \n            else:\n                # Store reminder in local database for other platforms\n                return self._store_local_reminder(title, reminder_time)\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def _parse_time_string(self, time_str):\n        \"\"\"Parse time string to datetime object\"\"\"\n        try:\n            now = datetime.now()\n            \n            if 'in' in time_str.lower():\n                # Relative time (e.g., \"in 30 minutes\")\n                if 'minute' in time_str:\n                    minutes = int(''.join(filter(str.isdigit, time_str)))\n                    return now + timedelta(minutes=minutes)\n                elif 'hour' in time_str:\n                    hours = int(''.join(filter(str.isdigit, time_str)))\n                    return now + timedelta(hours=hours)\n            \n            elif 'at' in time_str.lower():\n                # Absolute time (e.g., \"at 3:30 PM\")\n                import re\n                time_match = re.search(r'(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?', time_str.lower())\n                if time_match:\n                    hour = int(time_match.group(1))\n                    minute = int(time_match.group(2)) if time_match.group(2) else 0\n                    am_pm = time_match.group(3)\n                    \n                    if am_pm == 'pm' and hour != 12:\n                        hour += 12\n                    elif am_pm == 'am' and hour == 12:\n                        hour = 0\n                    \n                    reminder_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)\n                    \n                    # If time has passed today, set for tomorrow\n                    if reminder_time <= now:\n                        reminder_time += timedelta(days=1)\n                    \n                    return reminder_time\n            \n            # Default: 5 minutes from now\n            return now + timedelta(minutes=5)\n            \n        except:\n            # Fallback: 5 minutes from now\n            return datetime.now() + timedelta(minutes=5)\n    \n    def _store_local_reminder(self, title, reminder_time):\n        \"\"\"Store reminder in local database\"\"\"\n        try:\n            conn = sqlite3.connect('lua_assistant.db')\n            cursor = conn.cursor()\n            \n            cursor.execute('''\n                CREATE TABLE IF NOT EXISTS reminders (\n                    id INTEGER PRIMARY KEY AUTOINCREMENT,\n                    title TEXT NOT NULL,\n                    reminder_time TIMESTAMP NOT NULL,\n                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n                    completed BOOLEAN DEFAULT FALSE\n                )\n            ''')\n            \n            cursor.execute('''\n                INSERT INTO reminders (title, reminder_time)\n                VALUES (?, ?)\n            ''', (title, reminder_time))\n            \n            conn.commit()\n            conn.close()\n            \n            return {'success': True, 'message': f'Reminder stored: {title} at {reminder_time.strftime(\"%H:%M\")}'}\n            \n        except Exception as e:\n            return {'success': False, 'error': f'Failed to store reminder: {str(e)}'}\n    \n    def get_device_info(self):\n        \"\"\"Get device information\"\"\"\n        try:\n            info = {\n                'platform': self.system,\n                'python_version': platform.python_version(),\n                'machine': platform.machine(),\n                'processor': platform.processor()\n            }\n            \n            if self.system == 'android':\n                # Get Android device info via ADB\n                try:\n                    result = subprocess.run(['adb', 'shell', 'getprop', 'ro.product.model'], capture_output=True, text=True)\n                    if result.returncode == 0:\n                        info['device_model'] = result.stdout.strip()\n                    \n                    result = subprocess.run(['adb', 'shell', 'getprop', 'ro.build.version.release'], capture_output=True, text=True)\n                    if result.returncode == 0:\n                        info['android_version'] = result.stdout.strip()\n                except:\n                    pass\n            \n            return {'success': True, 'info': info}\n            \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def check_app_installed(self, package_name):\n        \"\"\"Check if app is installed on device\"\"\"\n        try:\n            if self.system == 'android':\n                cmd = ['adb', 'shell', 'pm', 'list', 'packages', package_name]\n                result = subprocess.run(cmd, capture_output=True, text=True)\n                \n                return {\n                    'success': True,\n                    'installed': package_name in result.stdout,\n                    'package': package_name\n                }\n            else:\n                return {'success': False, 'error': 'App check not supported on this platform'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n    \n    def get_installed_apps(self):\n        \"\"\"Get list of installed apps\"\"\"\n        try:\n            if self.system == 'android':\n                cmd = ['adb', 'shell', 'pm', 'list', 'packages', '-3']  # Third-party apps only\n                result = subprocess.run(cmd, capture_output=True, text=True)\n                \n                if result.returncode == 0:\n                    packages = []\n                    for line in result.stdout.strip().split('\\n'):\n                        if line.startswith('package:'):\n                            package_name = line.replace('package:', '')\n                            packages.append(package_name)\n                    \n                    return {'success': True, 'apps': packages}\n                else:\n                    return {'success': False, 'error': 'Failed to get app list'}\n            else:\n                return {'success': False, 'error': 'App listing not supported on this platform'}\n                \n        except Exception as e:\n            return {'success': False, 'error': str(e)}\n\n# Usage example\nif __name__ == \"__main__\":\n    device = DeviceIntegration()\n    \n    # Test device info\n    info = device.get_device_info()\n    print(f\"Device info: {info}\")\n    \n    # Test app launch\n    result = device.launch_app('calculator')\n    print(f\"Launch result: {result}\")\n    \n    # Test reminder\n    result = device.set_reminder('Test reminder', 'in 5 minutes')\n    print(f\"Reminder result: {result}\")
+import subprocess
+import os
+import platform
+import json
+from datetime import datetime
+
+class DeviceIntegration:
+    def __init__(self):
+        self.system = platform.system().lower()
+        self.android_packages = {
+            'whatsapp': 'com.whatsapp',
+            'instagram': 'com.instagram.android',
+            'youtube': 'com.google.android.youtube',
+            'facebook': 'com.facebook.katana',
+            'twitter': 'com.twitter.android',
+            'telegram': 'org.telegram.messenger',
+            'chrome': 'com.android.chrome',
+            'gmail': 'com.google.android.gm',
+            'maps': 'com.google.android.apps.maps',
+            'spotify': 'com.spotify.music',
+            'netflix': 'com.netflix.mediaclient',
+            'camera': 'com.android.camera2',
+            'gallery': 'com.google.android.apps.photos',
+            'settings': 'com.android.settings'
+        }
+    
+    def launch_app(self, app_name, package_name=None):
+        """Launch an application"""
+        try:
+            if not package_name:
+                package_name = self.android_packages.get(app_name.lower())
+            
+            if package_name:
+                return {
+                    'success': True,
+                    'message': f'Launching {app_name}',
+                    'package': package_name,
+                    'action': 'app_launch'
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'App {app_name} not found',
+                    'action': 'app_launch_failed'
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'action': 'app_launch_error'
+            }
+    
+    def make_call(self, phone_number=None, contact_name=None):
+        """Make a phone call"""
+        try:
+            if phone_number:
+                return {
+                    'success': True,
+                    'message': f'Calling {phone_number}',
+                    'phone_number': phone_number,
+                    'action': 'make_call'
+                }
+            elif contact_name:
+                return {
+                    'success': True,
+                    'message': f'Calling {contact_name}',
+                    'contact_name': contact_name,
+                    'action': 'make_call'
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'No phone number or contact specified',
+                    'action': 'call_failed'
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'action': 'call_error'
+            }
+    
+    def send_sms(self, contact_name, message):
+        """Send SMS message"""
+        try:
+            return {
+                'success': True,
+                'message': f'Sending SMS to {contact_name}: {message}',
+                'contact': contact_name,
+                'sms_message': message,
+                'action': 'send_sms'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'action': 'sms_error'
+            }
+    
+    def set_reminder(self, title, time_str):
+        """Set a reminder"""
+        try:
+            return {
+                'success': True,
+                'message': f'Reminder set: {title} at {time_str}',
+                'title': title,
+                'time': time_str,
+                'action': 'set_reminder'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'action': 'reminder_error'
+            }
+    
+    def control_music(self, action):
+        """Control music playback"""
+        try:
+            actions = {
+                'play_music': 'Playing music',
+                'pause_music': 'Pausing music',
+                'next_track': 'Playing next track',
+                'previous_track': 'Playing previous track',
+                'volume_up': 'Volume increased',
+                'volume_down': 'Volume decreased'
+            }
+            
+            message = actions.get(action, f'Music action: {action}')
+            
+            return {
+                'success': True,
+                'message': message,
+                'action': action
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'action': 'music_error'
+            }
+    
+    def control_camera(self, mode='default'):
+        """Control camera"""
+        try:
+            if mode == 'front':
+                message = 'Opening front camera for selfie'
+            else:
+                message = 'Opening camera'
+            
+            return {
+                'success': True,
+                'message': message,
+                'mode': mode,
+                'action': 'open_camera'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'action': 'camera_error'
+            }
+    
+    def get_device_info(self):
+        """Get device information"""
+        try:
+            return {
+                'system': self.system,
+                'platform': platform.platform(),
+                'available_apps': list(self.android_packages.keys()),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'system': 'unknown'
+            }

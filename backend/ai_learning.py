@@ -1,1 +1,142 @@
-import sqlite3\nimport json\nimport numpy as np\nfrom datetime import datetime, timedelta\nfrom sklearn.feature_extraction.text import TfidfVectorizer\nfrom sklearn.metrics.pairwise import cosine_similarity\nfrom sklearn.cluster import KMeans\nfrom collections import defaultdict, Counter\nimport re\nimport pickle\nimport os\n\nclass LuaAILearning:\n    def __init__(self, db_path='lua_assistant.db'):\n        self.db_path = db_path\n        self.vectorizer = TfidfVectorizer(stop_words='english', max_features=1000)\n        self.user_models = {}\n        self.command_patterns = {}\n        self.context_memory = defaultdict(list)\n        self.load_models()\n        \n    def load_models(self):\n        \"\"\"Load pre-trained models from disk\"\"\"\n        try:\n            if os.path.exists('lua_models.pkl'):\n                with open('lua_models.pkl', 'rb') as f:\n                    data = pickle.load(f)\n                    self.user_models = data.get('user_models', {})\n                    self.command_patterns = data.get('command_patterns', {})\n                    self.vectorizer = data.get('vectorizer', self.vectorizer)\n        except Exception as e:\n            print(f\"Model loading error: {e}\")\n    \n    def save_models(self):\n        \"\"\"Save trained models to disk\"\"\"\n        try:\n            data = {\n                'user_models': self.user_models,\n                'command_patterns': self.command_patterns,\n                'vectorizer': self.vectorizer\n            }\n            with open('lua_models.pkl', 'wb') as f:\n                pickle.dump(data, f)\n        except Exception as e:\n            print(f\"Model saving error: {e}\")\n    \n    def learn_from_interaction(self, user_id, command, intent, success, context=None):\n        \"\"\"Learn from user interaction\"\"\"\n        try:\n            # Store interaction in database\n            self._store_interaction(user_id, command, intent, success, context)\n            \n            # Update user model\n            self._update_user_model(user_id, command, intent, success)\n            \n            # Learn command patterns\n            self._learn_command_pattern(command, intent, success)\n            \n            # Update context memory\n            self._update_context_memory(user_id, command, intent, context)\n            \n            # Periodic model training\n            if self._should_retrain():\n                self._retrain_models()\n            \n            return True\n            \n        except Exception as e:\n            print(f\"Learning error: {e}\")\n            return False\n    \n    def _store_interaction(self, user_id, command, intent, success, context):\n        \"\"\"Store interaction in database\"\"\"\n        conn = sqlite3.connect(self.db_path)\n        cursor = conn.cursor()\n        \n        cursor.execute('''\n            INSERT INTO commands (user_id, command_text, intent, response, success, context)\n            VALUES (?, ?, ?, ?, ?, ?)\n        ''', (user_id, command, intent, '', success, json.dumps(context) if context else None))\n        \n        conn.commit()\n        conn.close()\n    \n    def _update_user_model(self, user_id, command, intent, success):\n        \"\"\"Update user-specific model\"\"\"\n        if user_id not in self.user_models:\n            self.user_models[user_id] = {\n                'command_history': [],\n                'intent_preferences': defaultdict(int),\n                'success_rate': defaultdict(list),\n                'usage_patterns': defaultdict(list),\n                'last_updated': datetime.now()\n            }\n        \n        model = self.user_models[user_id]\n        \n        # Update command history\n        model['command_history'].append({\n            'command': command,\n            'intent': intent,\n            'success': success,\n            'timestamp': datetime.now()\n        })\n        \n        # Keep only recent history (last 1000 commands)\n        if len(model['command_history']) > 1000:\n            model['command_history'] = model['command_history'][-1000:]\n        \n        # Update intent preferences\n        if success:\n            model['intent_preferences'][intent] += 1\n        \n        # Update success rate\n        model['success_rate'][intent].append(success)\n        if len(model['success_rate'][intent]) > 100:\n            model['success_rate'][intent] = model['success_rate'][intent][-100:]\n        \n        # Update usage patterns (time-based)\n        hour = datetime.now().hour\n        model['usage_patterns'][hour].append(intent)\n        \n        model['last_updated'] = datetime.now()\n    \n    def _learn_command_pattern(self, command, intent, success):\n        \"\"\"Learn global command patterns\"\"\"\n        if intent not in self.command_patterns:\n            self.command_patterns[intent] = {\n                'examples': [],\n                'keywords': Counter(),\n                'success_rate': [],\n                'variations': set()\n            }\n        \n        pattern = self.command_patterns[intent]\n        \n        # Add example\n        pattern['examples'].append(command)\n        if len(pattern['examples']) > 200:\n            pattern['examples'] = pattern['examples'][-200:]\n        \n        # Extract keywords\n        words = re.findall(r'\\b\\w+\\b', command.lower())\n        for word in words:\n            if len(word) > 2:  # Ignore short words\n                pattern['keywords'][word] += 1\n        \n        # Update success rate\n        pattern['success_rate'].append(success)\n        if len(pattern['success_rate']) > 100:\n            pattern['success_rate'] = pattern['success_rate'][-100:]\n        \n        # Add variation\n        pattern['variations'].add(command.lower())\n    \n    def _update_context_memory(self, user_id, command, intent, context):\n        \"\"\"Update context memory for better understanding\"\"\"\n        self.context_memory[user_id].append({\n            'command': command,\n            'intent': intent,\n            'context': context,\n            'timestamp': datetime.now()\n        })\n        \n        # Keep only recent context (last 50 interactions)\n        if len(self.context_memory[user_id]) > 50:\n            self.context_memory[user_id] = self.context_memory[user_id][-50:]\n    \n    def predict_intent(self, user_id, command, context=None):\n        \"\"\"Predict intent for a command using AI\"\"\"\n        try:\n            # Get user-specific predictions\n            user_prediction = self._predict_user_intent(user_id, command)\n            \n            # Get global pattern predictions\n            global_prediction = self._predict_global_intent(command)\n            \n            # Get context-based predictions\n            context_prediction = self._predict_context_intent(user_id, command, context)\n            \n            # Combine predictions with weights\n            combined_prediction = self._combine_predictions(\n                user_prediction, global_prediction, context_prediction\n            )\n            \n            return combined_prediction\n            \n        except Exception as e:\n            print(f\"Intent prediction error: {e}\")\n            return {'intent': 'unknown', 'confidence': 0.0}\n    \n    def _predict_user_intent(self, user_id, command):\n        \"\"\"Predict intent based on user's history\"\"\"\n        if user_id not in self.user_models:\n            return {'intent': 'unknown', 'confidence': 0.0}\n        \n        model = self.user_models[user_id]\n        \n        # Find similar commands in user's history\n        similarities = []\n        for hist_cmd in model['command_history'][-100:]:  # Recent history\n            similarity = self._calculate_similarity(command, hist_cmd['command'])\n            if similarity > 0.5:\n                similarities.append({\n                    'intent': hist_cmd['intent'],\n                    'similarity': similarity,\n                    'success': hist_cmd['success']\n                })\n        \n        if similarities:\n            # Weight by similarity and success\n            intent_scores = defaultdict(float)\n            for sim in similarities:\n                weight = sim['similarity'] * (1.2 if sim['success'] else 0.8)\n                intent_scores[sim['intent']] += weight\n            \n            best_intent = max(intent_scores.items(), key=lambda x: x[1])\n            confidence = min(best_intent[1] / len(similarities), 1.0)\n            \n            return {'intent': best_intent[0], 'confidence': confidence}\n        \n        return {'intent': 'unknown', 'confidence': 0.0}\n    \n    def _predict_global_intent(self, command):\n        \"\"\"Predict intent based on global patterns\"\"\"\n        best_match = {'intent': 'unknown', 'confidence': 0.0}\n        \n        for intent, pattern in self.command_patterns.items():\n            # Check keyword matches\n            command_words = set(re.findall(r'\\b\\w+\\b', command.lower()))\n            pattern_keywords = set(pattern['keywords'].keys())\n            \n            # Calculate keyword overlap\n            overlap = len(command_words.intersection(pattern_keywords))\n            total_words = len(command_words)\n            \n            if total_words > 0:\n                keyword_score = overlap / total_words\n                \n                # Check similarity with examples\n                max_similarity = 0\n                for example in pattern['examples'][-50:]:  # Recent examples\n                    similarity = self._calculate_similarity(command, example)\n                    max_similarity = max(max_similarity, similarity)\n                \n                # Combine scores\n                combined_score = (keyword_score * 0.4) + (max_similarity * 0.6)\n                \n                # Weight by success rate\n                if pattern['success_rate']:\n                    success_rate = sum(pattern['success_rate']) / len(pattern['success_rate'])\n                    combined_score *= (0.5 + success_rate * 0.5)\n                \n                if combined_score > best_match['confidence']:\n                    best_match = {'intent': intent, 'confidence': combined_score}\n        \n        return best_match\n    \n    def _predict_context_intent(self, user_id, command, context):\n        \"\"\"Predict intent based on context\"\"\"\n        if not context or user_id not in self.context_memory:\n            return {'intent': 'unknown', 'confidence': 0.0}\n        \n        # Analyze recent context\n        recent_context = self.context_memory[user_id][-10:]\n        \n        # Look for patterns in context\n        context_intents = [ctx['intent'] for ctx in recent_context]\n        intent_sequence = ' '.join(context_intents[-3:])  # Last 3 intents\n        \n        # Simple context-based prediction\n        context_patterns = {\n            'open music': 'control_music',\n            'call message': 'send_message',\n            'reminder open': 'open_app'\n        }\n        \n        for pattern, predicted_intent in context_patterns.items():\n            if pattern in intent_sequence:\n                return {'intent': predicted_intent, 'confidence': 0.7}\n        \n        return {'intent': 'unknown', 'confidence': 0.0}\n    \n    def _combine_predictions(self, user_pred, global_pred, context_pred):\n        \"\"\"Combine multiple predictions\"\"\"\n        predictions = [user_pred, global_pred, context_pred]\n        weights = [0.5, 0.3, 0.2]  # User history is most important\n        \n        # Weight predictions by confidence\n        weighted_scores = defaultdict(float)\n        total_weight = 0\n        \n        for pred, weight in zip(predictions, weights):\n            if pred['confidence'] > 0:\n                weighted_scores[pred['intent']] += pred['confidence'] * weight\n                total_weight += weight\n        \n        if weighted_scores and total_weight > 0:\n            # Normalize scores\n            for intent in weighted_scores:\n                weighted_scores[intent] /= total_weight\n            \n            best_intent = max(weighted_scores.items(), key=lambda x: x[1])\n            return {'intent': best_intent[0], 'confidence': best_intent[1]}\n        \n        return {'intent': 'unknown', 'confidence': 0.0}\n    \n    def _calculate_similarity(self, text1, text2):\n        \"\"\"Calculate similarity between two texts\"\"\"\n        try:\n            # Simple word-based similarity\n            words1 = set(re.findall(r'\\b\\w+\\b', text1.lower()))\n            words2 = set(re.findall(r'\\b\\w+\\b', text2.lower()))\n            \n            if not words1 or not words2:\n                return 0.0\n            \n            intersection = len(words1.intersection(words2))\n            union = len(words1.union(words2))\n            \n            return intersection / union if union > 0 else 0.0\n            \n        except:\n            return 0.0\n    \n    def get_user_insights(self, user_id):\n        \"\"\"Get insights about user behavior\"\"\"\n        if user_id not in self.user_models:\n            return {'error': 'User not found'}\n        \n        model = self.user_models[user_id]\n        \n        # Calculate statistics\n        total_commands = len(model['command_history'])\n        \n        # Success rate by intent\n        success_rates = {}\n        for intent, successes in model['success_rate'].items():\n            if successes:\n                success_rates[intent] = sum(successes) / len(successes)\n        \n        # Most used intents\n        top_intents = dict(model['intent_preferences'].most_common(5))\n        \n        # Usage patterns by hour\n        hourly_usage = {}\n        for hour, intents in model['usage_patterns'].items():\n            hourly_usage[hour] = len(intents)\n        \n        # Recent activity\n        recent_activity = model['command_history'][-10:]\n        \n        return {\n            'total_commands': total_commands,\n            'success_rates': success_rates,\n            'top_intents': top_intents,\n            'hourly_usage': hourly_usage,\n            'recent_activity': [\n                {\n                    'command': act['command'],\n                    'intent': act['intent'],\n                    'success': act['success'],\n                    'timestamp': act['timestamp'].isoformat()\n                }\n                for act in recent_activity\n            ],\n            'last_updated': model['last_updated'].isoformat()\n        }\n    \n    def get_personalized_suggestions(self, user_id):\n        \"\"\"Get personalized command suggestions\"\"\"\n        if user_id not in self.user_models:\n            return []\n        \n        model = self.user_models[user_id]\n        suggestions = []\n        \n        # Suggest based on time patterns\n        current_hour = datetime.now().hour\n        if current_hour in model['usage_patterns']:\n            common_intents = Counter(model['usage_patterns'][current_hour])\n            for intent, count in common_intents.most_common(3):\n                suggestions.append(f\"Try '{intent}' - you often use this at this time\")\n        \n        # Suggest based on low success rate\n        for intent, successes in model['success_rate'].items():\n            if successes and sum(successes) / len(successes) < 0.5:\n                suggestions.append(f\"Practice '{intent}' commands - success rate could improve\")\n        \n        # Suggest new features\n        all_intents = set(self.command_patterns.keys())\n        user_intents = set(model['intent_preferences'].keys())\n        unused_intents = all_intents - user_intents\n        \n        for intent in list(unused_intents)[:2]:\n            suggestions.append(f\"Try '{intent}' - new feature you haven't used\")\n        \n        return suggestions[:5]\n    \n    def _should_retrain(self):\n        \"\"\"Check if models should be retrained\"\"\"\n        # Retrain every 100 interactions or once per day\n        total_interactions = sum(len(model['command_history']) for model in self.user_models.values())\n        return total_interactions % 100 == 0\n    \n    def _retrain_models(self):\n        \"\"\"Retrain AI models with new data\"\"\"\n        try:\n            print(\"Retraining AI models...\")\n            \n            # Collect all training data\n            all_commands = []\n            all_intents = []\n            \n            for user_id, model in self.user_models.items():\n                for cmd_data in model['command_history']:\n                    if cmd_data['success']:  # Only learn from successful commands\n                        all_commands.append(cmd_data['command'])\n                        all_intents.append(cmd_data['intent'])\n            \n            if len(all_commands) > 10:  # Need minimum data\n                # Retrain vectorizer\n                self.vectorizer.fit(all_commands)\n                \n                # Update command patterns with clustering\n                self._update_command_clusters(all_commands, all_intents)\n            \n            # Save updated models\n            self.save_models()\n            \n            print(\"AI models retrained successfully\")\n            \n        except Exception as e:\n            print(f\"Model retraining error: {e}\")\n    \n    def _update_command_clusters(self, commands, intents):\n        \"\"\"Update command clusters for better pattern recognition\"\"\"\n        try:\n            # Vectorize commands\n            vectors = self.vectorizer.transform(commands)\n            \n            # Cluster similar commands\n            n_clusters = min(len(set(intents)), 10)  # Max 10 clusters\n            if n_clusters > 1:\n                kmeans = KMeans(n_clusters=n_clusters, random_state=42)\n                clusters = kmeans.fit_predict(vectors)\n                \n                # Update patterns based on clusters\n                for i, (command, intent, cluster) in enumerate(zip(commands, intents, clusters)):\n                    if intent not in self.command_patterns:\n                        self.command_patterns[intent] = {\n                            'examples': [],\n                            'keywords': Counter(),\n                            'success_rate': [],\n                            'variations': set(),\n                            'clusters': defaultdict(list)\n                        }\n                    \n                    self.command_patterns[intent]['clusters'][cluster].append(command)\n            \n        except Exception as e:\n            print(f\"Clustering error: {e}\")\n\n# Usage example\nif __name__ == \"__main__\":\n    # Initialize AI learning\n    ai = LuaAILearning()\n    \n    # Simulate learning from interactions\n    ai.learn_from_interaction('user1', 'open whatsapp', 'open_app', True)\n    ai.learn_from_interaction('user1', 'launch whatsapp', 'open_app', True)\n    ai.learn_from_interaction('user1', 'start whatsapp', 'open_app', True)\n    \n    # Test prediction\n    prediction = ai.predict_intent('user1', 'run whatsapp')\n    print(f\"Prediction: {prediction}\")\n    \n    # Get user insights\n    insights = ai.get_user_insights('user1')\n    print(f\"User insights: {insights}\")\n    \n    # Get suggestions\n    suggestions = ai.get_personalized_suggestions('user1')\n    print(f\"Suggestions: {suggestions}\")
+import json
+import os
+from datetime import datetime
+from collections import defaultdict
+
+class LuaAILearning:
+    def __init__(self, db_path='lua_assistant.db'):
+        self.db_path = db_path
+        self.user_models = {}
+        self.command_patterns = {}
+        self.context_memory = defaultdict(list)
+        
+    def predict_intent(self, user_id, command_text, context=None):
+        """Predict intent from command text"""
+        try:
+            command_lower = command_text.lower()
+            
+            # Simple intent classification
+            if any(word in command_lower for word in ['open', 'launch', 'start']):
+                intent = 'open_app'
+                confidence = 0.8
+            elif any(word in command_lower for word in ['call', 'phone', 'dial']):
+                intent = 'make_call'
+                confidence = 0.8
+            elif any(word in command_lower for word in ['message', 'sms', 'text']):
+                intent = 'send_message'
+                confidence = 0.8
+            elif any(word in command_lower for word in ['remind', 'reminder', 'alert']):
+                intent = 'set_reminder'
+                confidence = 0.8
+            elif any(word in command_lower for word in ['music', 'play', 'song']):
+                intent = 'control_music'
+                confidence = 0.8
+            elif any(word in command_lower for word in ['camera', 'photo', 'selfie']):
+                intent = 'control_camera'
+                confidence = 0.8
+            elif any(word in command_lower for word in ['weather', 'temperature']):
+                intent = 'get_weather'
+                confidence = 0.8
+            else:
+                intent = 'unknown'
+                confidence = 0.3
+            
+            return {
+                'intent': intent,
+                'confidence': confidence,
+                'user_id': user_id
+            }
+            
+        except Exception as e:
+            return {
+                'intent': 'unknown',
+                'confidence': 0.0,
+                'error': str(e)
+            }
+    
+    def learn_from_interaction(self, user_id, command_text, action, success, context=None):
+        """Learn from user interactions"""
+        try:
+            # Store interaction data
+            interaction = {
+                'user_id': user_id,
+                'command': command_text,
+                'action': action,
+                'success': success,
+                'timestamp': datetime.now().isoformat(),
+                'context': context or {}
+            }
+            
+            # Add to user's learning history
+            if user_id not in self.user_models:
+                self.user_models[user_id] = []
+            
+            self.user_models[user_id].append(interaction)
+            
+            # Keep only recent interactions (last 100)
+            if len(self.user_models[user_id]) > 100:
+                self.user_models[user_id] = self.user_models[user_id][-100:]
+            
+            return True
+            
+        except Exception as e:
+            print(f"Learning error: {e}")
+            return False
+    
+    def get_user_insights(self, user_id):
+        """Get AI-powered user insights"""
+        try:
+            if user_id not in self.user_models:
+                return {
+                    'total_interactions': 0,
+                    'success_rate': 0,
+                    'common_commands': [],
+                    'insights': []
+                }
+            
+            interactions = self.user_models[user_id]
+            total = len(interactions)
+            successful = sum(1 for i in interactions if i.get('success', False))
+            success_rate = (successful / total * 100) if total > 0 else 0
+            
+            # Get common commands
+            commands = [i['command'] for i in interactions]
+            command_counts = {}
+            for cmd in commands:
+                command_counts[cmd] = command_counts.get(cmd, 0) + 1
+            
+            common_commands = sorted(command_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+            
+            return {
+                'total_interactions': total,
+                'success_rate': round(success_rate, 2),
+                'common_commands': common_commands,
+                'insights': [
+                    f"You've used LUA {total} times",
+                    f"Success rate: {success_rate:.1f}%",
+                    f"Most used command: {common_commands[0][0] if common_commands else 'None'}"
+                ]
+            }
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'total_interactions': 0,
+                'success_rate': 0
+            }
+    
+    def get_personalized_suggestions(self, user_id):
+        """Get personalized suggestions for user"""
+        try:
+            suggestions = [
+                "Try saying 'Hey LUA, open WhatsApp'",
+                "You can ask me to call someone by saying 'Call John'",
+                "Set reminders with 'Remind me to call mom at 3 PM'",
+                "Control music with 'Play music' or 'Next song'",
+                "Take photos with 'Take a selfie' or 'Open camera'"
+            ]
+            
+            return suggestions[:3]  # Return top 3 suggestions
+            
+        except Exception as e:
+            return ["Ask me anything! I'm here to help."]
