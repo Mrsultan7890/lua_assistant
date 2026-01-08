@@ -162,8 +162,8 @@ class _LuaHomePageState extends State<LuaHomePage>
       
       if (mounted) {
         setState(() {
-          _speechAvailable = available;
-          if (available) {
+          _speechAvailable = available ?? false;
+          if (available ?? false) {
             _text = 'Ready! Say "Hey LUA" or tap Test Speech';
           } else {
             _text = 'Speech not available. Use Test Speech button';
