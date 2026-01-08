@@ -1,0 +1,34 @@
+name: Keep Backend Awake
+
+on:
+  schedule:
+    # Ping every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Ping LUA Backend
+      run: |
+        echo "Pinging LUA Backend..."
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://socialcoddy.run.place/health)
+        echo "Backend response: $response"
+        
+        if [ $response -eq 200 ]; then
+          echo "✅ Backend is awake and healthy"
+        else
+          echo "⚠️ Backend response: $response"
+          # Try to wake up with a simple API call
+          curl -s https://socialcoddy.run.place/ || true
+        fi
+        
+    - name: Test API Endpoint
+      run: |
+        echo "Testing API endpoint..."
+        curl -s -X POST https://socialcoddy.run.place/api/process_voice \
+          -H "Content-Type: application/json" \
+          -d '{"text": "ping", "user_id": "github_action"}' || true
+        echo "API test completed"

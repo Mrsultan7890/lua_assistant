@@ -437,10 +437,20 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
+        'uptime': time.time(),
         'components': {
             'backend': 'running',
-            'api': 'active'
+            'api': 'active',
+            'users_seen': len(lua_backend.seen_users)
         }
+    })
+
+@app.route('/ping', methods=['GET', 'POST'])
+def ping():
+    """Simple ping endpoint to keep service awake"""
+    return jsonify({
+        'status': 'pong',
+        'timestamp': datetime.now().isoformat()
     })
 
 if __name__ == '__main__':
