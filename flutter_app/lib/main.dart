@@ -63,6 +63,10 @@ class _LuaHomePageState extends State<LuaHomePage>
   late Animation<double> _pulseAnimation;
   late Animation<double> _waveAnimation;
   
+  // Theme variables
+  late Timer _themeTimer;
+  String _currentTheme = 'night'; // night, dawn, day, dusk
+  
   // Backend configuration
   String _backendUrl = 'https://your-railway-app.railway.app';
   String _userId = 'default';
@@ -81,6 +85,7 @@ class _LuaHomePageState extends State<LuaHomePage>
   void dispose() {
     _pulseController.dispose();
     _waveController.dispose();
+    _themeTimer.cancel();
     _stopAlwaysListening();
     super.dispose();
   }
@@ -91,6 +96,7 @@ class _LuaHomePageState extends State<LuaHomePage>
     await _initializeTTS();
     await _loadSettings();
     _setupAnimations();
+    _setupThemeTimer();
     
     setState(() {
       _isInitialized = true;
@@ -157,6 +163,76 @@ class _LuaHomePageState extends State<LuaHomePage>
     );
     
     _pulseController.repeat(reverse: true);
+  }
+  
+  void _setupThemeTimer() {
+    _updateTheme(); // Set initial theme
+    _themeTimer = Timer.periodic(Duration(minutes: 30), (timer) {
+      _updateTheme();
+    });
+  }
+  
+  void _updateTheme() {
+    final now = DateTime.now();
+    final hour = now.hour;
+    
+    String newTheme;
+    if (hour >= 5 && hour < 8) {
+      newTheme = 'dawn'; // Dawn: 5-8 AM
+    } else if (hour >= 8 && hour < 18) {
+      newTheme = 'day'; // Day: 8 AM - 6 PM
+    } else if (hour >= 18 && hour < 21) {
+      newTheme = 'dusk'; // Dusk: 6-9 PM
+    } else {
+      newTheme = 'night'; // Night: 9 PM - 5 AM
+    }
+    
+    if (newTheme != _currentTheme) {
+      setState(() {
+        _currentTheme = newTheme;
+      });
+    }
+  }
+  
+  Map<String, dynamic> _getThemeColors() {
+    switch (_currentTheme) {
+      case 'dawn':
+        return {
+          'background': [Color(0xFF2d1b69), Color(0xFF11998e), Color(0xFFf093fb)],
+          'moon': [Color(0xFFffd89b), Color(0xFF19547b)],
+          'text': Color(0xFFffd89b),
+          'accent': Color(0xFFf093fb),
+          'icon': Icons.wb_twilight,
+          'emoji': '🌅',
+        };
+      case 'day':
+        return {
+          'background': [Color(0xFF74b9ff), Color(0xFF0984e3), Color(0xFFfdcb6e)],
+          'moon': [Color(0xFFfdcb6e), Color(0xFFe17055)], // Sun colors
+          'text': Color(0xFF2d3436),
+          'accent': Color(0xFFe17055),
+          'icon': Icons.wb_sunny,
+          'emoji': '☀️',
+        };
+      case 'dusk':
+        return {
+          'background': [Color(0xFF667eea), Color(0xFF764ba2), Color(0xFFf093fb)],
+          'moon': [Color(0xFFfd79a8), Color(0xFFfdcb6e)],
+          'text': Color(0xFFdda0dd),
+          'accent': Color(0xFFfd79a8),
+          'icon': Icons.wb_twilight,
+          'emoji': '🌆',
+        };
+      default: // night
+        return {
+          'background': [Color(0xFF0a0a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+          'moon': [Color(0xFFf5f5dc), Color(0xFFe6e6fa), Color(0xFFd3d3d3)],
+          'text': Color(0xFFf5f5dc),
+          'accent': Color(0xFF00bcd4),
+          'icon': Icons.nightlight_round,
+          'emoji': '🌙',
+        };
+    }
   }
   
   void _onSpeechStatus(String status) {
@@ -410,13 +486,8 @@ class _LuaHomePageState extends State<LuaHomePage>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0a0a2e), // Deep night blue
-              Color(0xFF16213e), // Night blue
-              Color(0xFF0f3460), // Deep blue
-              Color(0xFF1a237e).withOpacity(0.8), // Dark blue with transparency
-            ],
-            stops: [0.0, 0.3, 0.7, 1.0],
+            colors: _getThemeColors()['background'],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -434,32 +505,34 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Widget _buildHeader() {
+    final themeColors = _getThemeColors();
+    
     return Container(
       padding: EdgeInsets.all(16),
       child: Row(
         children: [
-          // Moon icon with glow effect
+          // Dynamic time-based icon with glow effect
           Container(
             padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Color(0xFFf5f5dc).withOpacity(0.3),
-                  Color(0xFFf5f5dc).withOpacity(0.1),
+                  themeColors['text'].withOpacity(0.3),
+                  themeColors['text'].withOpacity(0.1),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Color(0xFFf5f5dc).withOpacity(0.4),
+                  color: themeColors['accent'].withOpacity(0.4),
                   blurRadius: 15,
                   spreadRadius: 3,
                 ),
               ],
             ),
             child: Icon(
-              Icons.nightlight_round, // Moon icon
-              color: Color(0xFFf5f5dc),
+              themeColors['icon'],
+              color: themeColors['text'],
               size: 28,
             ),
           ),
@@ -467,12 +540,12 @@ class _LuaHomePageState extends State<LuaHomePage>
           Text(
             'LUA',
             style: TextStyle(
-              color: Color(0xFFf5f5dc), // Moonlight color
+              color: themeColors['text'],
               fontSize: 28,
               fontWeight: FontWeight.bold,
               shadows: [
                 Shadow(
-                  color: Color(0xFFf5f5dc).withOpacity(0.5),
+                  color: themeColors['accent'].withOpacity(0.5),
                   blurRadius: 10,
                 ),
               ],
@@ -480,7 +553,7 @@ class _LuaHomePageState extends State<LuaHomePage>
           ),
           SizedBox(width: 8),
           Text(
-            '🌙',
+            themeColors['emoji'],
             style: TextStyle(fontSize: 20),
           ),
           Spacer(),
@@ -516,27 +589,25 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Widget _buildVoiceInterface() {
+    final themeColors = _getThemeColors();
+    
     return Container(
       padding: EdgeInsets.all(20),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Night Sky with Moon Design
+          // Dynamic Sky with Moon/Sun Design
           Container(
             width: 280,
             height: 280,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [
-                  Color(0xFF0a0a2e), // Dark night center
-                  Color(0xFF16213e), // Night blue
-                  Color(0xFF0f3460), // Deep blue
-                ],
+                colors: themeColors['background'],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Color(0xFF00bcd4).withOpacity(0.3),
+                  color: themeColors['accent'].withOpacity(0.3),
                   blurRadius: 30,
                   spreadRadius: 10,
                 ),
@@ -545,22 +616,36 @@ class _LuaHomePageState extends State<LuaHomePage>
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Stars background
-                ...List.generate(15, (index) => Positioned(
-                  top: (index * 17.0) % 200 + 20,
-                  left: (index * 23.0) % 200 + 20,
-                  child: Container(
-                    width: 2,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      shape: BoxShape.circle,
+                // Dynamic background elements (stars for night, clouds for day)
+                if (_currentTheme == 'night') ...
+                  List.generate(15, (index) => Positioned(
+                    top: (index * 17.0) % 200 + 20,
+                    left: (index * 23.0) % 200 + 20,
+                    child: Container(
+                      width: 2,
+                      height: 2,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                )),
+                  ))
+                else if (_currentTheme == 'day') ...
+                  List.generate(8, (index) => Positioned(
+                    top: (index * 25.0) % 180 + 30,
+                    left: (index * 35.0) % 180 + 30,
+                    child: Container(
+                      width: 20 + (index % 3) * 5,
+                      height: 12 + (index % 2) * 3,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  )),
                 
-                // Animated moon glow rings
-                if (_isListening) ..[
+                // Animated glow rings
+                if (_isListening) ...[
                   AnimatedBuilder(
                     animation: _waveAnimation,
                     builder: (context, child) {
@@ -570,7 +655,7 @@ class _LuaHomePageState extends State<LuaHomePage>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Color(0xFFf5f5dc).withOpacity(0.3), // Moonlight color
+                            color: themeColors['text'].withOpacity(0.3),
                             width: 1,
                           ),
                         ),
@@ -587,7 +672,7 @@ class _LuaHomePageState extends State<LuaHomePage>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Color(0xFFf5f5dc).withOpacity(0.5),
+                            color: themeColors['text'].withOpacity(0.5),
                             width: 1,
                           ),
                         ),
@@ -596,7 +681,7 @@ class _LuaHomePageState extends State<LuaHomePage>
                   ),
                 ],
                 
-                // Main Moon
+                // Main Moon/Sun
                 AnimatedBuilder(
                   animation: _pulseAnimation,
                   builder: (context, child) {
@@ -608,21 +693,17 @@ class _LuaHomePageState extends State<LuaHomePage>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
-                            colors: [
-                              Color(0xFFf5f5dc), // Cream white (moon center)
-                              Color(0xFFe6e6fa), // Lavender
-                              Color(0xFFd3d3d3), // Light gray (moon edge)
-                            ],
+                            colors: themeColors['moon'],
                             stops: [0.0, 0.7, 1.0],
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0xFFf5f5dc).withOpacity(0.8),
+                              color: themeColors['text'].withOpacity(0.8),
                               blurRadius: 25,
                               spreadRadius: 8,
                             ),
                             BoxShadow(
-                              color: Color(0xFF00bcd4).withOpacity(0.4),
+                              color: themeColors['accent'].withOpacity(0.4),
                               blurRadius: 40,
                               spreadRadius: 15,
                             ),
@@ -631,49 +712,35 @@ class _LuaHomePageState extends State<LuaHomePage>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            // Moon craters/texture
-                            Positioned(
-                              top: 25,
-                              left: 30,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Color(0xFFd3d3d3).withOpacity(0.6),
-                                  shape: BoxShape.circle,
+                            // Surface details (craters for moon, rays for sun)
+                            if (_currentTheme == 'night') ...[
+                              Positioned(
+                                top: 25, left: 30,
+                                child: Container(
+                                  width: 8, height: 8,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFFd3d3d3).withOpacity(0.6),
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Positioned(
-                              top: 45,
-                              right: 25,
-                              child: Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: Color(0xFFd3d3d3).withOpacity(0.4),
-                                  shape: BoxShape.circle,
+                              Positioned(
+                                top: 45, right: 25,
+                                child: Container(
+                                  width: 6, height: 6,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFFd3d3d3).withOpacity(0.4),
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Positioned(
-                              bottom: 35,
-                              left: 40,
-                              child: Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: Color(0xFFd3d3d3).withOpacity(0.5),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
+                            ],
                             
                             // Microphone icon
                             Icon(
                               _isListening ? Icons.mic : Icons.mic_off,
                               size: 40,
-                              color: Color(0xFF4a4a4a), // Dark gray for contrast
+                              color: _currentTheme == 'day' ? Colors.white : Color(0xFF4a4a4a),
                             ),
                           ],
                         ),
@@ -687,24 +754,24 @@ class _LuaHomePageState extends State<LuaHomePage>
           
           SizedBox(height: 30),
           
-          // Text container with night theme
+          // Text container with dynamic theme
           Container(
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFF0a0a2e).withOpacity(0.9),
-                  Color(0xFF16213e).withOpacity(0.8),
+                  themeColors['background'][0].withOpacity(0.9),
+                  themeColors['background'][1].withOpacity(0.8),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Color(0xFFf5f5dc).withOpacity(0.3), // Moonlight border
+                color: themeColors['text'].withOpacity(0.3),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Color(0xFFf5f5dc).withOpacity(0.1),
+                  color: themeColors['accent'].withOpacity(0.1),
                   blurRadius: 15,
                   spreadRadius: 2,
                 ),
@@ -716,11 +783,11 @@ class _LuaHomePageState extends State<LuaHomePage>
                   _text,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Color(0xFFf5f5dc), // Moonlight text color
+                    color: themeColors['text'],
                     fontWeight: FontWeight.w500,
                     shadows: [
                       Shadow(
-                        color: Color(0xFF00bcd4).withOpacity(0.5),
+                        color: themeColors['accent'].withOpacity(0.5),
                         blurRadius: 10,
                       ),
                     ],
@@ -730,16 +797,16 @@ class _LuaHomePageState extends State<LuaHomePage>
                 
                 if (_response.isNotEmpty) ...[
                   SizedBox(height: 10),
-                  Divider(color: Color(0xFFf5f5dc).withOpacity(0.3)),
+                  Divider(color: themeColors['text'].withOpacity(0.3)),
                   SizedBox(height: 10),
                   Text(
                     _response,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF00bcd4),
+                      color: themeColors['accent'],
                       shadows: [
                         Shadow(
-                          color: Color(0xFF00bcd4).withOpacity(0.5),
+                          color: themeColors['accent'].withOpacity(0.5),
                           blurRadius: 8,
                         ),
                       ],
@@ -752,9 +819,9 @@ class _LuaHomePageState extends State<LuaHomePage>
                   SizedBox(height: 10),
                   LinearProgressIndicator(
                     value: _confidence,
-                    backgroundColor: Color(0xFF0a0a2e),
+                    backgroundColor: themeColors['background'][0],
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFFf5f5dc),
+                      themeColors['text'],
                     ),
                   ),
                 ],
