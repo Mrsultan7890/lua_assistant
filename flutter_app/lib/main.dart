@@ -155,6 +155,9 @@ class _LuaHomePageState extends State<LuaHomePage>
         onError: _onSpeechError,
       );
       
+      // Handle null case
+      available = available ?? false;
+      
       print('Speech recognition available: $available');
       
       if (mounted) {
@@ -357,6 +360,9 @@ class _LuaHomePageState extends State<LuaHomePage>
           }
         },
       );
+      
+      // Handle null case
+      started = started ?? false;
       
       print('Speech listen started: $started');
       
@@ -1534,6 +1540,9 @@ class _LuaHomePageState extends State<LuaHomePage>
           }
         },
       );
+      
+      // Handle null case
+      started = started ?? false;
       
       print('Test listening started: $started');
       

@@ -15,6 +15,10 @@ import json
 import logging
 import re
 from dotenv import load_dotenv
+try:
+    import libsql_client
+except ImportError:
+    libsql_client = None
 
 # Load environment variables
 load_dotenv()
@@ -32,27 +36,118 @@ class LuaBackend:
         self.active_users = {}
         self.command_queue = []
         self.response_cache = {}
-        self.seen_users = self._load_seen_users()  # Load from persistent storage
+        self.db_client = None
+        self.seen_users = self._load_seen_users()
+        
+        # Initialize database connection
+        self._init_database()
         
         logger.info("LUA Backend initialized successfully")
     
-    def _load_seen_users(self):
-        """Load seen users from file or return empty set"""
+    def _init_database(self):
+        """Initialize Turso database connection"""
         try:
-            import json
-            with open('/tmp/lua_seen_users.json', 'r') as f:
-                return set(json.load(f))
-        except:
+            if libsql_client:
+                db_url = os.getenv('TURSO_DATABASE_URL')
+                auth_token = os.getenv('TURSO_AUTH_TOKEN')
+                
+                if db_url and auth_token:
+                    self.db_client = libsql_client.create_client(
+                        url=db_url,
+                        auth_token=auth_token
+                    )
+                    
+                    # Create tables if they don't exist
+                    self._create_tables()
+                    logger.info("Turso database connected successfully")
+                else:
+                    logger.warning("Turso credentials not found, using file storage")
+            else:
+                logger.warning("libsql_client not available, using file storage")
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
+            self.db_client = None
+    
+    def _create_tables(self):
+        """Create necessary database tables"""
+        try:
+            if self.db_client:
+                # Users table
+                self.db_client.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id TEXT PRIMARY KEY,
+                        first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        total_commands INTEGER DEFAULT 0
+                    )
+                """)
+                
+                # Commands table
+                self.db_client.execute("""
+                    CREATE TABLE IF NOT EXISTS commands (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT,
+                        command_text TEXT,
+                        action TEXT,
+                        success BOOLEAN,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                
+                logger.info("Database tables created/verified")
+        except Exception as e:
+            logger.error(f"Table creation error: {e}")
+    
+    def _load_seen_users(self):
+        """Load seen users from database or file"""
+        try:
+            if self.db_client:
+                result = self.db_client.execute("SELECT id FROM users")
+                return set(row[0] for row in result.rows)
+            else:
+                # Fallback to file storage
+                with open('/tmp/lua_seen_users.json', 'r') as f:
+                    return set(json.load(f))
+        except Exception as e:
+            logger.error(f"Error loading seen users: {e}")
             return set()
     
-    def _save_seen_users(self):
-        """Save seen users to file"""
+    def _save_user_to_db(self, user_id):
+        """Save user to database"""
         try:
-            import json
-            with open('/tmp/lua_seen_users.json', 'w') as f:
-                json.dump(list(self.seen_users), f)
+            if self.db_client:
+                self.db_client.execute(
+                    "INSERT OR IGNORE INTO users (id) VALUES (?)",
+                    [user_id]
+                )
+                self.db_client.execute(
+                    "UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?",
+                    [user_id]
+                )
+            else:
+                # Fallback to file storage
+                with open('/tmp/lua_seen_users.json', 'w') as f:
+                    json.dump(list(self.seen_users), f)
         except Exception as e:
-            logger.error(f"Failed to save seen users: {e}")
+            logger.error(f"Error saving user: {e}")
+    
+    def _save_command_to_db(self, user_id, command_text, action, success):
+        """Save command to database"""
+        try:
+            if self.db_client:
+                self.db_client.execute(
+                    "INSERT INTO commands (user_id, command_text, action, success) VALUES (?, ?, ?, ?)",
+                    [user_id, command_text, action, success]
+                )
+                
+                # Update user command count
+                self.db_client.execute(
+                    "UPDATE users SET total_commands = total_commands + 1 WHERE id = ?",
+                    [user_id]
+                )
+        except Exception as e:
+            logger.error(f"Error saving command: {e}")
     
     def is_first_time_user(self, user_id):
         """Check if user is using LUA for the first time"""
@@ -61,7 +156,7 @@ class LuaBackend:
     def mark_user_as_seen(self, user_id):
         """Mark user as seen"""
         self.seen_users.add(user_id)
-        self._save_seen_users()
+        self._save_user_to_db(user_id)
     
     def handle_first_time_user(self):
         """Handle first time user with welcome message and help"""
@@ -113,6 +208,14 @@ Just say "Hey LUA" anytime to activate me. Try it now!
             # Log performance
             processing_time = time.time() - start_time
             logger.info(f"Command processed in {processing_time:.2f}s: {command_text}")
+            
+            # Save command to database
+            self._save_command_to_db(
+                user_id, 
+                command_text, 
+                result.get('action', 'unknown'), 
+                result.get('success', False)
+            )
             
             return result
             
@@ -421,11 +524,51 @@ def get_user_stats():
     """Get user statistics"""
     try:
         user_id = request.args.get('user_id', 'default')
+        
+        if lua_backend.db_client:
+            # Get stats from database
+            user_result = lua_backend.db_client.execute(
+                "SELECT total_commands, first_seen, last_active FROM users WHERE id = ?",
+                [user_id]
+            )
+            
+            if user_result.rows:
+                row = user_result.rows[0]
+                total_commands = row[0] or 0
+                first_seen = row[1]
+                last_active = row[2]
+            else:
+                total_commands = 0
+                first_seen = datetime.now().isoformat()
+                last_active = datetime.now().isoformat()
+            
+            # Get recent commands
+            recent_result = lua_backend.db_client.execute(
+                "SELECT command_text, action, success, timestamp FROM commands WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10",
+                [user_id]
+            )
+            
+            recent_commands = [{
+                'command': row[0],
+                'action': row[1],
+                'success': row[2],
+                'timestamp': row[3]
+            } for row in recent_result.rows]
+            
+        else:
+            # Fallback stats
+            total_commands = 0
+            first_seen = datetime.now().isoformat()
+            last_active = datetime.now().isoformat()
+            recent_commands = []
+        
         stats = {
             'user_id': user_id,
-            'total_commands': 0,
+            'total_commands': total_commands,
             'success_rate': 100,
-            'last_active': datetime.now().isoformat()
+            'first_seen': first_seen,
+            'last_active': last_active,
+            'recent_commands': recent_commands
         }
         return jsonify(stats)
         
@@ -436,6 +579,8 @@ def get_user_stats():
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
+    db_status = 'connected' if lua_backend.db_client else 'file_storage'
+    
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
@@ -443,6 +588,7 @@ def health_check():
         'components': {
             'backend': 'running',
             'api': 'active',
+            'database': db_status,
             'users_seen': len(lua_backend.seen_users)
         }
     })
