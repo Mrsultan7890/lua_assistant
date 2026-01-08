@@ -45,8 +45,16 @@ class MainActivity: FlutterActivity() {
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
                 }
-                "enableVoiceInteraction" -> {
-                    enableVoiceInteraction(result)
+                "enableSystemControl" -> {
+                    enableSystemControl(result)
+                }
+                "executeSystemCommand" -> {
+                    val command = call.argument<String>("command")
+                    if (command != null) {
+                        executeSystemCommand(command, result)
+                    } else {
+                        result.error("INVALID_ARGUMENT", "Command is required", null)
+                    }
                 }
                 else -> {
                     result.notImplemented()
@@ -71,14 +79,9 @@ class MainActivity: FlutterActivity() {
             methodChannel?.invokeMethod("wakeWordDetected", null)
         }
         
-        if (intent?.getBooleanExtra("voice_interaction_wake", false) == true) {
-            // Voice interaction wake detected
-            methodChannel?.invokeMethod("voiceInteractionWake", null)
-        }
-        
-        if (intent?.getBooleanExtra("voice_session_active", false) == true) {
-            // Voice session is active
-            methodChannel?.invokeMethod("voiceSessionActive", null)
+        if (intent?.getBooleanExtra("accessibility_wake_word", false) == true) {
+            // Wake word detected by accessibility service
+            methodChannel?.invokeMethod("accessibilityWakeWord", null)
         }
     }
     
@@ -196,14 +199,53 @@ class MainActivity: FlutterActivity() {
         }
     }
     
-    private fun enableVoiceInteraction(result: MethodChannel.Result) {
+    private fun enableSystemControl(result: MethodChannel.Result) {
         try {
-            val intent = Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            // Enable Device Admin
+            val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+            intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, 
+                android.content.ComponentName(this, LuaDeviceAdminReceiver::class.java))
+            intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, 
+                "Enable LUA Assistant for full system control")
             startActivity(intent)
-            result.success("Voice interaction settings opened")
+            
+            // Also enable accessibility for UI control
+            val accessibilityIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            accessibilityIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(accessibilityIntent)
+            
+            result.success("System control setup initiated")
         } catch (e: Exception) {
-            result.error("VOICE_INTERACTION_ERROR", "Failed to open voice interaction settings: ${e.message}", null)
+            result.error("SYSTEM_CONTROL_ERROR", "Failed to enable system control: ${e.message}", null)
+        }
+    }
+    
+    private fun executeSystemCommand(command: String, result: MethodChannel.Result) {
+        try {
+            when (command.lowercase()) {
+                "screenshot" -> {
+                    // Trigger screenshot via accessibility service
+                    val intent = Intent(this, SystemControlService::class.java)
+                    intent.putExtra("command", "screenshot")
+                    startService(intent)
+                    result.success("Screenshot taken")
+                }
+                "reboot" -> {
+                    Runtime.getRuntime().exec("su -c 'reboot'")
+                    result.success("Rebooting device")
+                }
+                "lock" -> {
+                    val intent = Intent(this, SystemControlService::class.java)
+                    intent.putExtra("command", "lock_screen")
+                    startService(intent)
+                    result.success("Screen locked")
+                }
+                else -> {
+                    result.error("UNKNOWN_COMMAND", "Command not recognized: $command", null)
+                }
+            }
+        } catch (e: Exception) {
+            result.error("COMMAND_ERROR", "Failed to execute command: ${e.message}", null)
         }
     }
 }
