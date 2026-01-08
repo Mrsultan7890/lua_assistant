@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.lua.assistant">
     
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
     
@@ -28,11 +29,9 @@
 
     <application
         android:label="LUA Assistant"
-        android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
-        android:theme="@style/LaunchTheme"
-        android:exported="true">
+        android:theme="@style/LaunchTheme">
         
         <activity
             android:name=".MainActivity"
@@ -48,21 +47,9 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
             
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-            
-            <!-- Voice activation intent -->
-            <intent-filter>
-                <action android:name="android.intent.action.VOICE_COMMAND" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            
-            <!-- Assistant intent -->
-            <intent-filter>
-                <action android:name="android.intent.action.ASSIST" />
-                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
         
