@@ -1,93 +1,43 @@
 package com.lua.assistant
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.MediaStore
-import android.provider.AlarmClock
+import android.os.Build
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CAMERA_CHANNEL = "lua_assistant/camera"
-    private val REMINDER_CHANNEL = "lua_assistant/reminder"
-    private val SYSTEM_CHANNEL = "lua_assistant/system"
+    private val CHANNEL = "lua_assistant/system"
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
-        // Camera channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CAMERA_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "openCamera" -> {
-                        val mode = call.argument<String>("mode") ?: "default"
-                        openCamera(mode, result)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-        
-        // Reminder channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, REMINDER_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "setReminder" -> {
-                        val title = call.argument<String>("title") ?: "Reminder"
-                        val time = call.argument<String>("time") ?: "now"
-                        setReminder(title, time, result)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-        
-        // System channel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SYSTEM_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "openApp" -> {
-                        val packageName = call.argument<String>("packageName") ?: ""
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openApp" -> {
+                    val packageName = call.argument<String>("packageName")
+                    if (packageName != null) {
                         openApp(packageName, result)
+                    } else {
+                        result.error("INVALID_ARGUMENT", "Package name is required", null)
                     }
-                    else -> result.notImplemented()
+                }
+                "startBackgroundService" -> {
+                    startBackgroundService(result)
+                }
+                "stopBackgroundService" -> {
+                    stopBackgroundService(result)
+                }
+                "requestBatteryOptimization" -> {
+                    requestBatteryOptimization(result)
+                }
+                else -> {
+                    result.notImplemented()
                 }
             }
-    }
-    
-    private fun openCamera(mode: String, result: MethodChannel.Result) {
-        try {
-            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            
-            if (mode == "front") {
-                intent.putExtra("android.intent.extras.CAMERA_FACING", 1)
-            }
-            
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivity(intent)
-                result.success("Camera opened")
-            } else {
-                result.error("NO_CAMERA", "Camera app not found", null)
-            }
-        } catch (e: Exception) {
-            result.error("CAMERA_ERROR", e.message, null)
-        }
-    }
-    
-    private fun setReminder(title: String, time: String, result: MethodChannel.Result) {
-        try {
-            val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-                putExtra(AlarmClock.EXTRA_MESSAGE, title)
-                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-            }
-            
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivity(intent)
-                result.success("Reminder set")
-            } else {
-                result.error("NO_ALARM", "Alarm app not found", null)
-            }
-        } catch (e: Exception) {
-            result.error("REMINDER_ERROR", e.message, null)
         }
     }
     
@@ -96,12 +46,67 @@ class MainActivity: FlutterActivity() {
             val intent = packageManager.getLaunchIntentForPackage(packageName)
             if (intent != null) {
                 startActivity(intent)
-                result.success("App opened")
+                result.success("App opened successfully")
             } else {
-                result.error("APP_NOT_FOUND", "App not installed: $packageName", null)
+                // Try to find app by name
+                val apps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                val matchingApp = apps.find { 
+                    it.loadLabel(packageManager).toString().lowercase().contains(packageName.lowercase())
+                }
+                
+                if (matchingApp != null) {
+                    val launchIntent = packageManager.getLaunchIntentForPackage(matchingApp.packageName)
+                    if (launchIntent != null) {
+                        startActivity(launchIntent)
+                        result.success("App opened successfully")
+                    } else {
+                        result.error("APP_NOT_LAUNCHABLE", "App found but cannot be launched", null)
+                    }
+                } else {
+                    result.error("APP_NOT_FOUND", "App not found: $packageName", null)
+                }
             }
         } catch (e: Exception) {
-            result.error("APP_ERROR", e.message, null)
+            result.error("OPEN_APP_ERROR", "Failed to open app: ${e.message}", null)
+        }
+    }
+    
+    private fun startBackgroundService(result: MethodChannel.Result) {
+        try {
+            val serviceIntent = Intent(this, BackgroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            result.success("Background service started")
+        } catch (e: Exception) {
+            result.error("SERVICE_ERROR", "Failed to start background service: ${e.message}", null)
+        }
+    }
+    
+    private fun stopBackgroundService(result: MethodChannel.Result) {
+        try {
+            val serviceIntent = Intent(this, BackgroundService::class.java)
+            stopService(serviceIntent)
+            result.success("Background service stopped")
+        } catch (e: Exception) {
+            result.error("SERVICE_ERROR", "Failed to stop background service: ${e.message}", null)
+        }
+    }
+    
+    private fun requestBatteryOptimization(result: MethodChannel.Result) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                intent.data = Uri.parse("package:$packageName")
+                startActivity(intent)
+                result.success("Battery optimization request sent")
+            } else {
+                result.success("Battery optimization not needed on this Android version")
+            }
+        } catch (e: Exception) {
+            result.error("BATTERY_ERROR", "Failed to request battery optimization: ${e.message}", null)
         }
     }
 }

@@ -102,8 +102,21 @@ class _LuaHomePageState extends State<LuaHomePage>
       _isInitialized = true;
     });
     
+    // Start background service
+    await _startBackgroundService();
+    
     // Auto-start always listening
     _startAlwaysListening();
+  }
+  
+  Future<void> _startBackgroundService() async {
+    try {
+      const platform = MethodChannel('lua_assistant/system');
+      await platform.invokeMethod('startBackgroundService');
+      await platform.invokeMethod('requestBatteryOptimization');
+    } catch (e) {
+      print('Background service error: $e');
+    }
   }
   
   Future<void> _requestPermissions() async {
@@ -377,6 +390,18 @@ class _LuaHomePageState extends State<LuaHomePage>
       case 'open_app':
         await _openApp(result['package'] ?? result['app_name']);
         break;
+      case 'play_music':
+      case 'pause_music':
+      case 'next_track':
+      case 'previous_track':
+        await _controlMusic(action);
+        break;
+      case 'open_camera':
+        await _openCamera(result['mode'] ?? 'default');
+        break;
+      case 'set_reminder':
+        await _setReminder(result['title'], result['time']);
+        break;
     }
   }
   
@@ -413,6 +438,57 @@ class _LuaHomePageState extends State<LuaHomePage>
       await platform.invokeMethod('openApp', {'packageName': appIdentifier});
     } catch (e) {
       _showError('Could not open app: $appIdentifier');
+    }
+  }
+  
+  Future<void> _controlMusic(String action) async {
+    try {
+      String intent;
+      switch (action) {
+        case 'play_music':
+          intent = 'android.intent.action.MUSIC_PLAYER';
+          break;
+        case 'pause_music':
+          intent = 'android.media.AUDIO_BECOMING_NOISY';
+          break;
+        default:
+          intent = 'android.intent.action.MUSIC_PLAYER';
+      }
+      
+      if (await canLaunchUrl(Uri.parse('intent://music'))) {
+        await launchUrl(Uri.parse('intent://music'));
+      } else {
+        // Try to open default music app
+        await _openApp('music');
+      }
+    } catch (e) {
+      _showError('Music control failed: $e');
+    }
+  }
+  
+  Future<void> _openCamera(String mode) async {
+    try {
+      String url = 'intent://camera';
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        await _openApp('camera');
+      }
+    } catch (e) {
+      _showError('Camera failed: $e');
+    }
+  }
+  
+  Future<void> _setReminder(String title, String time) async {
+    try {
+      String url = 'intent://reminder?title=${Uri.encodeComponent(title)}&time=${Uri.encodeComponent(time)}';
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        _showError('Please set reminder manually: $title at $time');
+      }
+    } catch (e) {
+      _showError('Reminder failed: $e');
     }
   }
   
