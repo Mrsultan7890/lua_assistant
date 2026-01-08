@@ -31,9 +31,27 @@ class LuaBackend:
         self.active_users = {}
         self.command_queue = []
         self.response_cache = {}
-        self.seen_users = set()  # Track first-time users
+        self.seen_users = self._load_seen_users()  # Load from persistent storage
         
         logger.info("LUA Backend initialized successfully")
+    
+    def _load_seen_users(self):
+        """Load seen users from file or return empty set"""
+        try:
+            import json
+            with open('/tmp/lua_seen_users.json', 'r') as f:
+                return set(json.load(f))
+        except:
+            return set()
+    
+    def _save_seen_users(self):
+        """Save seen users to file"""
+        try:
+            import json
+            with open('/tmp/lua_seen_users.json', 'w') as f:
+                json.dump(list(self.seen_users), f)
+        except Exception as e:
+            logger.error(f"Failed to save seen users: {e}")
     
     def is_first_time_user(self, user_id):
         """Check if user is using LUA for the first time"""
@@ -42,6 +60,7 @@ class LuaBackend:
     def mark_user_as_seen(self, user_id):
         """Mark user as seen"""
         self.seen_users.add(user_id)
+        self._save_seen_users()
     
     def handle_first_time_user(self):
         """Handle first time user with welcome message and help"""
@@ -73,11 +92,19 @@ Just say "Hey LUA" anytime to activate me. Try it now!
         """Process command with basic text analysis"""
         try:
             start_time = time.time()
+            logger.info(f"Processing command from user {user_id}: {command_text}")
+            logger.info(f"Seen users: {list(self.seen_users)}")
             
-            # Check if first time user
-            if self.is_first_time_user(user_id):
+            # Check if first time user (only for very first interaction)
+            if self.is_first_time_user(user_id) and command_text.lower().strip() in ['', 'hello', 'hi', 'hey']:
+                logger.info(f"First time user with greeting: {user_id}")
                 self.mark_user_as_seen(user_id)
                 return self.handle_first_time_user()
+            
+            # Mark user as seen for any command
+            if self.is_first_time_user(user_id):
+                logger.info(f"Marking new user as seen: {user_id}")
+                self.mark_user_as_seen(user_id)
             
             # Basic command processing
             result = self.execute_command(command_text, context)

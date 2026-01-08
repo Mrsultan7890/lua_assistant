@@ -440,28 +440,47 @@ class _LuaHomePageState extends State<LuaHomePage>
     
     await _speak(responseText);
     
-    switch (action) {
-      case 'make_call':
-        await _makeCall(result['phone_number'] ?? result['contact_name']);
-        break;
-      case 'send_sms':
-        await _sendSMS(result['contact'], result['message']);
-        break;
-      case 'open_app':
-        await _openApp(result['package'] ?? result['app_name']);
-        break;
-      case 'play_music':
-      case 'pause_music':
-      case 'next_track':
-      case 'previous_track':
-        await _controlMusic(action);
-        break;
-      case 'open_camera':
-        await _openCamera(result['mode'] ?? 'default');
-        break;
-      case 'set_reminder':
-        await _setReminder(result['title'], result['time']);
-        break;
+    // Show execution status
+    print('Executing action: $action');
+    
+    try {
+      switch (action) {
+        case 'make_call':
+          await _makeCall(result['phone_number'] ?? result['contact_name']);
+          _showSuccess('Call initiated');
+          break;
+        case 'send_sms':
+          await _sendSMS(result['contact'], result['message']);
+          _showSuccess('SMS app opened');
+          break;
+        case 'open_app':
+          await _openApp(result['package'] ?? result['app_name']);
+          _showSuccess('App launched');
+          break;
+        case 'play_music':
+        case 'pause_music':
+        case 'next_track':
+        case 'previous_track':
+          await _controlMusic(action);
+          _showSuccess('Music control executed');
+          break;
+        case 'open_camera':
+          await _openCamera(result['mode'] ?? 'default');
+          _showSuccess('Camera opened');
+          break;
+        case 'set_reminder':
+          await _setReminder(result['title'], result['time']);
+          _showSuccess('Reminder set');
+          break;
+        case 'unknown':
+          _showError('Command not recognized');
+          break;
+        default:
+          print('Action executed: $action');
+      }
+    } catch (e) {
+      _showError('Failed to execute: $e');
+      print('Execution error: $e');
     }
   }
   
@@ -596,6 +615,15 @@ class _LuaHomePageState extends State<LuaHomePage>
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+      ),
+    );
+  }
+  
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
       ),
     );
   }
