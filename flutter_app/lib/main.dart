@@ -326,12 +326,9 @@ class _LuaHomePageState extends State<LuaHomePage>
   void _onSpeechStatus(String status) {
     print('Speech status: $status');
     
-    // Auto-restart listening if it stops unexpectedly
     if (status == 'notListening' && _isAlwaysListening) {
-      print('Speech stopped, restarting in 1 second...');
-      Timer(Duration(seconds: 1), () {
-        if (_isAlwaysListening && !_isListening) {
-          print('Restarting always listening...');
+      Timer(Duration(milliseconds: 500), () {
+        if (_isAlwaysListening) {
           _startAlwaysListening();
         }
       });
@@ -346,23 +343,7 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Future<void> _startAlwaysListening() async {
-    if (!_isInitialized) {
-      print('App not initialized, cannot start listening');
-      return;
-    }
-    
-    print('Starting always listening mode...');
-    
-    // Stop any existing listening session first
-    if (_isListening) {
-      print('Stopping existing listening session...');
-      try {
-        await _speech.stop();
-        await Future.delayed(Duration(milliseconds: 500));
-      } catch (e) {
-        print('Error stopping speech: $e');
-      }
-    }
+    if (!_speechAvailable) return;
     
     if (mounted) {
       setState(() {
@@ -375,59 +356,38 @@ class _LuaHomePageState extends State<LuaHomePage>
     _waveController.repeat();
     
     try {
-      print('Starting speech recognition...');
-      bool? started = await _speech.listen(
+      await _speech.listen(
         onResult: _onAlwaysListeningResult,
-        listenFor: Duration(minutes: 10),
+        listenFor: Duration(seconds: 30),
         pauseFor: Duration(seconds: 1),
-        localeId: 'en_US',
         cancelOnError: false,
         partialResults: true,
-        onSoundLevelChange: (level) {
-          if (level > 0.05) {
-            print('Sound level: $level');
-          }
-        },
       );
-      
-      // Handle null case properly
-      started = started ?? false;
-      
-      print('Speech listen started: $started');
-      
-      if (!started) {
-        print('Failed to start speech recognition, retrying...');
-        Timer(Duration(seconds: 2), () => _startAlwaysListening());
-      }
     } catch (e) {
-      print('Speech listen error: $e');
-      _showError('Speech recognition error: $e');
+      print('Speech error: $e');
       if (_isAlwaysListening) {
-        Timer(Duration(seconds: 3), () => _startAlwaysListening());
+        Timer(Duration(seconds: 1), () => _startAlwaysListening());
       }
     }
   }
   
   void _onAlwaysListeningResult(result) {
     String recognizedWords = result.recognizedWords.toLowerCase();
-    print('Always listening - Recognized: "$recognizedWords", Final: ${result.finalResult}, Confidence: ${result.confidence}');
+    print('Recognized: "$recognizedWords"');
     
-    // More flexible wake word detection
+    // Check for wake word
     if (recognizedWords.contains('hey lua') || 
         recognizedWords.contains('hey lula') ||
-        recognizedWords.contains('hey loo') ||
-        recognizedWords.contains('lua') && recognizedWords.contains('hey')) {
-      print('Wake word detected! Activating assistant...');
+        recognizedWords.contains('lua')) {
+      print('Wake word detected!');
       _activateAssistant();
-      return; // Don't restart listening immediately after activation
+      return;
     }
     
-    // Only restart listening when result is final and we're still in always listening mode
+    // Restart listening immediately after each result
     if (_isAlwaysListening && result.finalResult) {
-      print('Final result received, restarting listening in 500ms...');
-      Timer(Duration(milliseconds: 500), () {
-        if (_isAlwaysListening && !_isListening) {
-          print('Restarting always listening after final result...');
+      Timer(Duration(milliseconds: 100), () {
+        if (_isAlwaysListening) {
           _startAlwaysListening();
         }
       });
