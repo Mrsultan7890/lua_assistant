@@ -37,6 +37,9 @@ class MainActivity: FlutterActivity() {
                 "hideFloatingIndicator" -> {
                     hideFloatingIndicator(result)
                 }
+                "getInstalledApps" -> {
+                    getInstalledApps(result)
+                }
                 "requestBatteryOptimization" -> {
                     requestBatteryOptimization(result)
                 }
@@ -120,6 +123,30 @@ class MainActivity: FlutterActivity() {
             result.success("Floating indicator hidden")
         } catch (e: Exception) {
             result.error("INDICATOR_ERROR", "Failed to hide floating indicator: ${e.message}", null)
+        }
+    }
+    
+    private fun getInstalledApps(result: MethodChannel.Result) {
+        try {
+            val apps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+            val appList = mutableListOf<Map<String, Any>>()
+            
+            for (app in apps) {
+                val launchIntent = packageManager.getLaunchIntentForPackage(app.packageName)
+                if (launchIntent != null && app.packageName != packageName) {
+                    appList.add(mapOf(
+                        "name" to app.loadLabel(packageManager).toString(),
+                        "package" to app.packageName
+                    ))
+                }
+            }
+            
+            // Sort by name
+            appList.sortBy { it["name"] as String }
+            
+            result.success(appList)
+        } catch (e: Exception) {
+            result.error("GET_APPS_ERROR", "Failed to get installed apps: ${e.message}", null)
         }
     }
     

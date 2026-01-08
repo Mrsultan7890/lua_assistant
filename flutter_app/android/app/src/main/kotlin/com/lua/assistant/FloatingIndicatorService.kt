@@ -55,4 +55,65 @@ class FloatingIndicatorService : Service() {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
                 WindowManager.LayoutParams.TYPE_PHONE
-            }\n            \n            val params = WindowManager.LayoutParams(\n                WindowManager.LayoutParams.WRAP_CONTENT,\n                WindowManager.LayoutParams.WRAP_CONTENT,\n                layoutFlag,\n                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,\n                PixelFormat.TRANSLUCENT\n            )\n            \n            params.gravity = Gravity.TOP or Gravity.END\n            params.x = 0\n            params.y = 100\n            \n            windowManager.addView(floatingView, params)\n            isShowing = true\n            \n        } catch (e: Exception) {\n            e.printStackTrace()\n        }\n    }\n    \n    private fun hideFloatingIndicator() {\n        if (!isShowing || floatingView == null) return\n        \n        try {\n            windowManager.removeView(floatingView)\n            floatingView = null\n            isShowing = false\n        } catch (e: Exception) {\n            e.printStackTrace()\n        }\n    }\n    \n    private fun updateIndicatorTheme() {\n        if (!isShowing || floatingView == null) return\n        \n        val textView1 = floatingView?.findViewById<TextView>(android.R.id.text1)\n        val textView2 = floatingView?.findViewById<TextView>(android.R.id.text2)\n        \n        val (title, subtitle) = getThemeBasedContent()\n        textView1?.text = title\n        textView2?.text = subtitle\n    }\n    \n    private fun getThemeBasedContent(): Pair<String, String> {\n        val calendar = Calendar.getInstance()\n        val hour = calendar.get(Calendar.HOUR_OF_DAY)\n        \n        return when (hour) {\n            in 5..7 -> Pair(\"🌅 LUA\", \"Dawn Mode\")\n            in 8..17 -> Pair(\"☀️ LUA\", \"Day Mode\")\n            in 18..20 -> Pair(\"🌆 LUA\", \"Dusk Mode\")\n            else -> Pair(\"🌙 LUA\", \"Night Mode\")\n        }\n    }\n    \n    override fun onDestroy() {\n        super.onDestroy()\n        hideFloatingIndicator()\n    }\n}
+            }
+            
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                layoutFlag,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            )
+            
+            params.gravity = Gravity.TOP or Gravity.END
+            params.x = 0
+            params.y = 100
+            
+            windowManager.addView(floatingView, params)
+            isShowing = true
+            
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    
+    private fun hideFloatingIndicator() {
+        if (!isShowing || floatingView == null) return
+        
+        try {
+            windowManager.removeView(floatingView)
+            floatingView = null
+            isShowing = false
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    
+    private fun updateIndicatorTheme() {
+        if (!isShowing || floatingView == null) return
+        
+        val textView1 = floatingView?.findViewById<TextView>(android.R.id.text1)
+        val textView2 = floatingView?.findViewById<TextView>(android.R.id.text2)
+        
+        val (title, subtitle) = getThemeBasedContent()
+        textView1?.text = title
+        textView2?.text = subtitle
+    }
+    
+    private fun getThemeBasedContent(): Pair<String, String> {
+        val calendar = Calendar.getInstance()
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        
+        return when (hour) {
+            in 5..7 -> Pair("🌅 LUA", "Dawn Mode")
+            in 8..17 -> Pair("☀️ LUA", "Day Mode")
+            in 18..20 -> Pair("🌆 LUA", "Dusk Mode")
+            else -> Pair("🌙 LUA", "Night Mode")
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        hideFloatingIndicator()
+    }
+}

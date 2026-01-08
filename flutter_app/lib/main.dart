@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
+import 'launcher_home.dart';
 
 void main() {
   runApp(LuaApp());
@@ -74,6 +75,9 @@ class _LuaHomePageState extends State<LuaHomePage>
   // Statistics
   int _totalCommands = 0;
   List<Map<String, dynamic>> _recentCommands = [];
+  
+  // Launcher mode
+  bool _isLauncherMode = false;
   
   @override
   void initState() {
@@ -152,6 +156,7 @@ class _LuaHomePageState extends State<LuaHomePage>
     _backendUrl = prefs.getString('backend_url') ?? 'https://socialcoddy.run.place';
     _userId = prefs.getString('user_id') ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
     _totalCommands = prefs.getInt('total_commands') ?? 0;
+    _isLauncherMode = prefs.getBool('launcher_enabled') ?? true;
     
     await prefs.setString('user_id', _userId);
   }
@@ -566,6 +571,14 @@ class _LuaHomePageState extends State<LuaHomePage>
     await prefs.setInt('total_commands', _totalCommands);
   }
   
+  Future<void> _toggleLauncherMode() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isLauncherMode = !_isLauncherMode;
+    });
+    await prefs.setBool('launcher_enabled', _isLauncherMode);
+  }
+  
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -592,6 +605,20 @@ class _LuaHomePageState extends State<LuaHomePage>
             ],
           ),
         ),
+      );
+    }
+    
+    // Show launcher home if launcher mode is enabled
+    if (_isLauncherMode) {
+      return LauncherHomeScreen(
+        currentTheme: _currentTheme,
+        themeColors: _getThemeColors(),
+        onLuaActivate: () {
+          setState(() {
+            _isLauncherMode = false;
+          });
+          _activateAssistant();
+        },
       );
     }
     
@@ -1013,51 +1040,83 @@ class _LuaHomePageState extends State<LuaHomePage>
   Widget _buildControlPanel() {
     return Container(
       padding: EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Column(
         children: [
-          GestureDetector(
-            onTap: () {
-              if (_isAlwaysListening) {
-                _stopAlwaysListening();
-              } else {
-                _startAlwaysListening();
-              }
-            },
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(
-                  color: Color(0xFF00bcd4),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _isAlwaysListening ? Icons.hearing : Icons.hearing_disabled,
-                    color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
-                    size: 20,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    _isAlwaysListening ? 'Always On' : 'Tap to Wake',
-                    style: TextStyle(
-                      color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
-                      fontWeight: FontWeight.bold,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (_isAlwaysListening) {
+                    _stopAlwaysListening();
+                  } else {
+                    _startAlwaysListening();
+                  }
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                      color: Color(0xFF00bcd4),
                     ),
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isAlwaysListening ? Icons.hearing : Icons.hearing_disabled,
+                        color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _isAlwaysListening ? 'Always On' : 'Tap to Wake',
+                        style: TextStyle(
+                          color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              
+              GestureDetector(
+                onTap: () => _showStatsDialog(),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF1e2746),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                      color: Color(0xFF00bcd4).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.analytics, color: Color(0xFF00bcd4), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        '$_totalCommands',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          
+          SizedBox(height: 12),
           GestureDetector(
-            onTap: () => _showStatsDialog(),
+            onTap: _toggleLauncherMode,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
                 color: Color(0xFF1e2746),
                 borderRadius: BorderRadius.circular(25),
@@ -1068,10 +1127,10 @@ class _LuaHomePageState extends State<LuaHomePage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.analytics, color: Color(0xFF00bcd4), size: 20),
+                  Icon(Icons.home, color: Color(0xFF00bcd4), size: 20),
                   SizedBox(width: 8),
                   Text(
-                    '$_totalCommands',
+                    'Launcher Mode',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
