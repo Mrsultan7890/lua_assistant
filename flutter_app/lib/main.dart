@@ -1455,7 +1455,6 @@ class _LuaHomePageState extends State<LuaHomePage>
       ),
     );
   }
-}
   
   Future<void> _testSpeechRecognition() async {
     print('Testing speech recognition manually...');
@@ -1466,7 +1465,6 @@ class _LuaHomePageState extends State<LuaHomePage>
     });
     
     try {
-      // Don't reinitialize, just check if it's available
       if (!_speechAvailable) {
         await _initializeSpeech();
       }
@@ -1536,3 +1534,4 @@ class _LuaHomePageState extends State<LuaHomePage>
       });
     }
   }
+}
