@@ -411,9 +411,12 @@ class _LuaHomePageState extends State<LuaHomePage>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0d1421),
-              Color(0xFF1a237e).withOpacity(0.3),
+              Color(0xFF0a0a2e), // Deep night blue
+              Color(0xFF16213e), // Night blue
+              Color(0xFF0f3460), // Deep blue
+              Color(0xFF1a237e).withOpacity(0.8), // Dark blue with transparency
             ],
+            stops: [0.0, 0.3, 0.7, 1.0],
           ),
         ),
         child: SafeArea(
@@ -435,22 +438,68 @@ class _LuaHomePageState extends State<LuaHomePage>
       padding: EdgeInsets.all(16),
       child: Row(
         children: [
-          Icon(Icons.assistant, color: Color(0xFF00bcd4), size: 32),
+          // Moon icon with glow effect
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Color(0xFFf5f5dc).withOpacity(0.3),
+                  Color(0xFFf5f5dc).withOpacity(0.1),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFFf5f5dc).withOpacity(0.4),
+                  blurRadius: 15,
+                  spreadRadius: 3,
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.nightlight_round, // Moon icon
+              color: Color(0xFFf5f5dc),
+              size: 28,
+            ),
+          ),
           SizedBox(width: 12),
           Text(
             'LUA',
             style: TextStyle(
-              color: Colors.white,
+              color: Color(0xFFf5f5dc), // Moonlight color
               fontSize: 28,
               fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Color(0xFFf5f5dc).withOpacity(0.5),
+                  blurRadius: 10,
+                ),
+              ],
             ),
+          ),
+          SizedBox(width: 8),
+          Text(
+            '🌙',
+            style: TextStyle(fontSize: 20),
           ),
           Spacer(),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: _isAlwaysListening ? Colors.green : Colors.red,
+              gradient: LinearGradient(
+                colors: _isAlwaysListening 
+                    ? [Color(0xFF4caf50), Color(0xFF66bb6a)]
+                    : [Color(0xFFf44336), Color(0xFFef5350)],
+              ),
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: (_isAlwaysListening ? Colors.green : Colors.red).withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
             child: Text(
               _isAlwaysListening ? 'ACTIVE' : 'SLEEPING',
@@ -472,87 +521,194 @@ class _LuaHomePageState extends State<LuaHomePage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedBuilder(
-            animation: _waveAnimation,
-            builder: (context, child) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (_isListening)
-                    Container(
-                      width: 200 + (_waveAnimation.value * 50),
-                      height: 200 + (_waveAnimation.value * 50),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Color(0xFF00bcd4).withOpacity(0.3),
-                          width: 2,
-                        ),
-                      ),
+          // Night Sky with Moon Design
+          Container(
+            width: 280,
+            height: 280,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Color(0xFF0a0a2e), // Dark night center
+                  Color(0xFF16213e), // Night blue
+                  Color(0xFF0f3460), // Deep blue
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFF00bcd4).withOpacity(0.3),
+                  blurRadius: 30,
+                  spreadRadius: 10,
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Stars background
+                ...List.generate(15, (index) => Positioned(
+                  top: (index * 17.0) % 200 + 20,
+                  left: (index * 23.0) % 200 + 20,
+                  child: Container(
+                    width: 2,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      shape: BoxShape.circle,
                     ),
-                  
-                  if (_isListening)
-                    Container(
-                      width: 160 + (_waveAnimation.value * 30),
-                      height: 160 + (_waveAnimation.value * 30),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Color(0xFF00bcd4).withOpacity(0.5),
-                          width: 2,
+                  ),
+                )),
+                
+                // Animated moon glow rings
+                if (_isListening) ..[
+                  AnimatedBuilder(
+                    animation: _waveAnimation,
+                    builder: (context, child) {
+                      return Container(
+                        width: 200 + (_waveAnimation.value * 40),
+                        height: 200 + (_waveAnimation.value * 40),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Color(0xFFf5f5dc).withOpacity(0.3), // Moonlight color
+                            width: 1,
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
+                  ),
                   
                   AnimatedBuilder(
-                    animation: _pulseAnimation,
+                    animation: _waveAnimation,
                     builder: (context, child) {
-                      return Transform.scale(
-                        scale: _isListening ? _pulseAnimation.value : 1.0,
-                        child: Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                Color(0xFF00bcd4),
-                                Color(0xFF2196f3),
-                                Color(0xFF1a237e),
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFF00bcd4).withOpacity(0.5),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            _isListening ? Icons.mic : Icons.mic_off,
-                            size: 50,
-                            color: Colors.white,
+                      return Container(
+                        width: 160 + (_waveAnimation.value * 25),
+                        height: 160 + (_waveAnimation.value * 25),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Color(0xFFf5f5dc).withOpacity(0.5),
+                            width: 1,
                           ),
                         ),
                       );
                     },
                   ),
                 ],
-              );
-            },
+                
+                // Main Moon
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _isListening ? _pulseAnimation.value : 1.0,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              Color(0xFFf5f5dc), // Cream white (moon center)
+                              Color(0xFFe6e6fa), // Lavender
+                              Color(0xFFd3d3d3), // Light gray (moon edge)
+                            ],
+                            stops: [0.0, 0.7, 1.0],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0xFFf5f5dc).withOpacity(0.8),
+                              blurRadius: 25,
+                              spreadRadius: 8,
+                            ),
+                            BoxShadow(
+                              color: Color(0xFF00bcd4).withOpacity(0.4),
+                              blurRadius: 40,
+                              spreadRadius: 15,
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Moon craters/texture
+                            Positioned(
+                              top: 25,
+                              left: 30,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFd3d3d3).withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 45,
+                              right: 25,
+                              child: Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFd3d3d3).withOpacity(0.4),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 35,
+                              left: 40,
+                              child: Container(
+                                width: 4,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFd3d3d3).withOpacity(0.5),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            
+                            // Microphone icon
+                            Icon(
+                              _isListening ? Icons.mic : Icons.mic_off,
+                              size: 40,
+                              color: Color(0xFF4a4a4a), // Dark gray for contrast
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
           
           SizedBox(height: 30),
           
+          // Text container with night theme
           Container(
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Color(0xFF1e2746).withOpacity(0.8),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: Color(0xFF00bcd4).withOpacity(0.3),
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF0a0a2e).withOpacity(0.9),
+                  Color(0xFF16213e).withOpacity(0.8),
+                ],
               ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Color(0xFFf5f5dc).withOpacity(0.3), // Moonlight border
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFFf5f5dc).withOpacity(0.1),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
             child: Column(
               children: [
@@ -560,21 +716,33 @@ class _LuaHomePageState extends State<LuaHomePage>
                   _text,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.white,
+                    color: Color(0xFFf5f5dc), // Moonlight text color
                     fontWeight: FontWeight.w500,
+                    shadows: [
+                      Shadow(
+                        color: Color(0xFF00bcd4).withOpacity(0.5),
+                        blurRadius: 10,
+                      ),
+                    ],
                   ),
                   textAlign: TextAlign.center,
                 ),
                 
                 if (_response.isNotEmpty) ...[
                   SizedBox(height: 10),
-                  Divider(color: Color(0xFF00bcd4).withOpacity(0.3)),
+                  Divider(color: Color(0xFFf5f5dc).withOpacity(0.3)),
                   SizedBox(height: 10),
                   Text(
                     _response,
                     style: TextStyle(
                       fontSize: 14,
                       color: Color(0xFF00bcd4),
+                      shadows: [
+                        Shadow(
+                          color: Color(0xFF00bcd4).withOpacity(0.5),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -584,9 +752,9 @@ class _LuaHomePageState extends State<LuaHomePage>
                   SizedBox(height: 10),
                   LinearProgressIndicator(
                     value: _confidence,
-                    backgroundColor: Colors.grey[800],
+                    backgroundColor: Color(0xFF0a0a2e),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF00bcd4),
+                      Color(0xFFf5f5dc),
                     ),
                   ),
                 ],
