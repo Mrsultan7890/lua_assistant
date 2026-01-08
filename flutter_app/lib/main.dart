@@ -7,7 +7,9 @@ import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:async';
+import 'dart:io';
 
 void main() {
   runApp(LuaApp());
@@ -53,7 +55,8 @@ class _LuaHomePageState extends State<LuaHomePage>
   bool _isListening = false;
   bool _isAlwaysListening = false;
   bool _isInitialized = false;
-  String _text = 'Say "Hey LUA" to activate';
+  bool _speechAvailable = false; // Track if speech is actually available
+  String _text = 'Initializing...';
   String _response = '';
   double _confidence = 1.0;
   
@@ -105,8 +108,12 @@ class _LuaHomePageState extends State<LuaHomePage>
     // Start background service
     await _startBackgroundService();
     
-    // Auto-start always listening
-    _startAlwaysListening();
+    // Auto-start always listening only if speech is available
+    if (_speechAvailable) {
+      _startAlwaysListening();
+    } else {
+      print('Speech not available, skipping auto-start');
+    }
   }
   
   Future<void> _startBackgroundService() async {
@@ -120,22 +127,58 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Future<void> _requestPermissions() async {
-    await Permission.microphone.request();
+    print('Requesting permissions...');
+    
+    var micStatus = await Permission.microphone.request();
+    print('Microphone permission: $micStatus');
+    
+    if (micStatus != PermissionStatus.granted) {
+      _showError('Microphone permission is required for voice recognition');
+      print('Microphone permission denied');
+    }
+    
     await Permission.phone.request();
     await Permission.sms.request();
     await Permission.camera.request();
     await Permission.storage.request();
+    
+    print('All permissions requested');
   }
   
   Future<void> _initializeSpeech() async {
     _speech = stt.SpeechToText();
-    bool available = await _speech.initialize(
-      onStatus: _onSpeechStatus,
-      onError: _onSpeechError,
-    );
+    print('Initializing speech recognition...');
     
-    if (!available) {
-      _showError('Speech recognition not available');
+    try {
+      bool available = await _speech.initialize(
+        onStatus: _onSpeechStatus,
+        onError: _onSpeechError,
+      );
+      
+      print('Speech recognition available: $available');
+      
+      setState(() {
+        _speechAvailable = available;
+        if (available) {
+          _text = 'Ready! Say "Hey LUA" or tap Test Speech';
+        } else {
+          _text = 'Speech not available. Use Test Speech button';
+        }
+      });
+      
+      if (!available) {
+        _showError('Speech recognition not available - using fallback mode');
+        print('Speech recognition initialization failed');
+      } else {
+        print('Speech recognition initialized successfully');
+      }
+    } catch (e) {
+      print('Speech initialization error: $e');
+      setState(() {
+        _speechAvailable = false;
+        _text = 'Speech error. Use Test Speech button';
+      });
+      _showError('Speech initialization failed: $e');
     }
   }
   
@@ -246,6 +289,17 @@ class _LuaHomePageState extends State<LuaHomePage>
   
   void _onSpeechStatus(String status) {
     print('Speech status: $status');
+    
+    // Auto-restart listening if it stops unexpectedly
+    if (status == 'notListening' && _isAlwaysListening) {
+      print('Speech stopped, restarting in 1 second...');
+      Timer(Duration(seconds: 1), () {
+        if (_isAlwaysListening && !_isListening) {
+          print('Restarting always listening...');
+          _startAlwaysListening();
+        }
+      });
+    }
   }
   
   void _onSpeechError(dynamic error) {
@@ -256,10 +310,16 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Future<void> _startAlwaysListening() async {
-    if (!_isInitialized) return;
+    if (!_isInitialized) {
+      print('App not initialized, cannot start listening');
+      return;
+    }
+    
+    print('Starting always listening mode...');
     
     // Stop any existing listening session first
     if (_isListening) {
+      print('Stopping existing listening session...');
       await _speech.stop();
       await Future.delayed(Duration(milliseconds: 500));
     }
@@ -273,41 +333,57 @@ class _LuaHomePageState extends State<LuaHomePage>
     _waveController.repeat();
     
     try {
-      await _speech.listen(
+      print('Starting speech recognition...');
+      bool started = await _speech.listen(
         onResult: _onAlwaysListeningResult,
         listenFor: Duration(minutes: 10),
-        pauseFor: Duration(seconds: 2), // Reduced pause time
+        pauseFor: Duration(seconds: 1), // Further reduced pause time
         localeId: 'en_US',
         cancelOnError: false,
         partialResults: true,
         onSoundLevelChange: (level) {
-          // Increase sensitivity by lowering threshold
-          if (level > 0.1) {
-            print('Sound detected: $level');
+          // More sensitive sound detection
+          if (level > 0.05) {
+            print('Sound level: $level');
           }
         },
       );
+      
+      print('Speech listen started: $started');
+      
+      if (!started) {
+        print('Failed to start speech recognition, retrying...');
+        Timer(Duration(seconds: 2), () => _startAlwaysListening());
+      }
     } catch (e) {
       print('Speech listen error: $e');
+      _showError('Speech recognition error: $e');
       if (_isAlwaysListening) {
-        Timer(Duration(seconds: 2), () => _startAlwaysListening());
+        Timer(Duration(seconds: 3), () => _startAlwaysListening());
       }
     }
   }
   
   void _onAlwaysListeningResult(result) {
     String recognizedWords = result.recognizedWords.toLowerCase();
-    print('Recognized: $recognizedWords, Final: ${result.finalResult}');
+    print('Always listening - Recognized: "$recognizedWords", Final: ${result.finalResult}, Confidence: ${result.confidence}');
     
-    if (recognizedWords.contains('hey lua') || recognizedWords.contains('hey lula')) {
+    // More flexible wake word detection
+    if (recognizedWords.contains('hey lua') || 
+        recognizedWords.contains('hey lula') ||
+        recognizedWords.contains('hey loo') ||
+        recognizedWords.contains('lua') && recognizedWords.contains('hey')) {
+      print('Wake word detected! Activating assistant...');
       _activateAssistant();
       return; // Don't restart listening immediately after activation
     }
     
     // Only restart listening when result is final and we're still in always listening mode
     if (_isAlwaysListening && result.finalResult) {
-      Timer(Duration(milliseconds: 1000), () {
+      print('Final result received, restarting listening in 500ms...');
+      Timer(Duration(milliseconds: 500), () {
         if (_isAlwaysListening && !_isListening) {
+          print('Restarting always listening after final result...');
           _startAlwaysListening();
         }
       });
@@ -1053,65 +1129,112 @@ class _LuaHomePageState extends State<LuaHomePage>
   Widget _buildControlPanel() {
     return Container(
       padding: EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Column(
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (_speechAvailable) {
+                    if (_isAlwaysListening) {
+                      _stopAlwaysListening();
+                    } else {
+                      _startAlwaysListening();
+                    }
+                  } else {
+                    _showError('Speech not available. Use Test Speech or Diagnostics');
+                  }
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                      color: Color(0xFF00bcd4),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _speechAvailable 
+                            ? (_isAlwaysListening ? Icons.hearing : Icons.hearing_disabled)
+                            : Icons.error,
+                        color: _speechAvailable 
+                            ? (_isAlwaysListening ? Colors.white : Color(0xFF00bcd4))
+                            : Colors.red,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _speechAvailable 
+                            ? (_isAlwaysListening ? 'Always On' : 'Tap to Wake')
+                            : 'Speech Error',
+                        style: TextStyle(
+                          color: _speechAvailable 
+                              ? (_isAlwaysListening ? Colors.white : Color(0xFF00bcd4))
+                              : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              GestureDetector(
+                onTap: () => _showStatsDialog(),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF1e2746),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                      color: Color(0xFF00bcd4).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.analytics, color: Color(0xFF00bcd4), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        '$_totalCommands',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          SizedBox(height: 12),
+          
+          // Test button for manual speech recognition
           GestureDetector(
-            onTap: () {
-              if (_isAlwaysListening) {
-                _stopAlwaysListening();
-              } else {
-                _startAlwaysListening();
-              }
-            },
+            onTap: _testSpeechRecognition,
             child: Container(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
-                color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
+                color: Color(0xFFff9800),
                 borderRadius: BorderRadius.circular(25),
                 border: Border.all(
-                  color: Color(0xFF00bcd4),
+                  color: Color(0xFFff9800),
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    _isAlwaysListening ? Icons.hearing : Icons.hearing_disabled,
-                    color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
-                    size: 20,
-                  ),
+                  Icon(Icons.mic_external_on, color: Colors.white, size: 20),
                   SizedBox(width: 8),
                   Text(
-                    _isAlwaysListening ? 'Always On' : 'Tap to Wake',
-                    style: TextStyle(
-                      color: _isAlwaysListening ? Colors.white : Color(0xFF00bcd4),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          GestureDetector(
-            onTap: () => _showStatsDialog(),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Color(0xFF1e2746),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(
-                  color: Color(0xFF00bcd4).withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.analytics, color: Color(0xFF00bcd4), size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    '$_totalCommands',
+                    'Test Speech',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1120,6 +1243,123 @@ class _LuaHomePageState extends State<LuaHomePage>
                 ],
               ),
             ),
+          ),
+          
+          SizedBox(height: 8),
+          
+          // Diagnostic button
+          GestureDetector(
+            onTap: _showDiagnostics,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Color(0xFF9c27b0),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Diagnostics',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showDiagnostics() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1e2746),
+        title: Text(
+          'LUA Diagnostics',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('App Initialized: $_isInitialized', style: TextStyle(color: Colors.white)),
+            Text('Speech Available: $_speechAvailable', style: TextStyle(color: Colors.white)),
+            Text('Always Listening: $_isAlwaysListening', style: TextStyle(color: Colors.white)),
+            Text('Currently Listening: $_isListening', style: TextStyle(color: Colors.white)),
+            Text('Backend URL: $_backendUrl', style: TextStyle(color: Colors.white)),
+            SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _reinitializeSpeech();
+              },
+              child: Text('Reinitialize Speech'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _checkPermissions();
+              },
+              child: Text('Check Permissions'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close', style: TextStyle(color: Color(0xFF00bcd4))),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _reinitializeSpeech() async {
+    print('Reinitializing speech recognition...');
+    setState(() {
+      _text = 'Reinitializing speech...';
+    });
+    
+    try {
+      await _speech.stop();
+      await Future.delayed(Duration(seconds: 1));
+      await _initializeSpeech();
+      _showSuccess('Speech reinitialized');
+    } catch (e) {
+      print('Reinitialization error: $e');
+      _showError('Reinitialization failed: $e');
+    }
+  }
+  
+  Future<void> _checkPermissions() async {
+    print('Checking permissions...');
+    
+    var micStatus = await Permission.microphone.status;
+    var phoneStatus = await Permission.phone.status;
+    
+    String permissionInfo = 'Microphone: $micStatus\nPhone: $phoneStatus';
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1e2746),
+        title: Text('Permissions Status', style: TextStyle(color: Colors.white)),
+        content: Text(permissionInfo, style: TextStyle(color: Colors.white)),
+        actions: [
+          if (micStatus != PermissionStatus.granted)
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await Permission.microphone.request();
+                _checkPermissions();
+              },
+              child: Text('Request Mic', style: TextStyle(color: Color(0xFF00bcd4))),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close', style: TextStyle(color: Color(0xFF00bcd4))),
           ),
         ],
       ),
@@ -1216,3 +1456,83 @@ class _LuaHomePageState extends State<LuaHomePage>
     );
   }
 }
+  
+  Future<void> _testSpeechRecognition() async {
+    print('Testing speech recognition manually...');
+    
+    setState(() {
+      _text = 'Testing... Say something!';
+      _isListening = true;
+    });
+    
+    try {
+      // Don't reinitialize, just check if it's available
+      if (!_speechAvailable) {
+        await _initializeSpeech();
+      }
+      
+      if (!_speechAvailable) {
+        _showError('Speech recognition not available');
+        setState(() {
+          _isListening = false;
+          _text = 'Speech not available';
+        });
+        return;
+      }
+      
+      print('Starting test listening...');
+      bool started = await _speech.listen(
+        onResult: (result) {
+          print('Test result: ${result.recognizedWords}');
+          setState(() {
+            _text = 'Heard: ${result.recognizedWords}';
+          });
+          
+          if (result.finalResult) {
+            setState(() {
+              _isListening = false;
+            });
+            
+            String words = result.recognizedWords.toLowerCase();
+            if (words.contains('hey lua') || words.contains('hey lula')) {
+              _showSuccess('Wake word detected!');
+              _activateAssistant();
+            } else {
+              _showSuccess('Speech working! Try saying "Hey LUA"');
+              Timer(Duration(seconds: 2), () {
+                if (_speechAvailable) {
+                  _startAlwaysListening();
+                }
+              });
+            }
+          }
+        },
+        listenFor: Duration(seconds: 10),
+        pauseFor: Duration(seconds: 1),
+        partialResults: true,
+        onSoundLevelChange: (level) {
+          print('Test sound level: $level');
+          if (level > 0.1) {
+            print('Good sound detected: $level');
+          }
+        },
+      );
+      
+      print('Test listening started: $started');
+      
+      if (!started) {
+        _showError('Failed to start test listening');
+        setState(() {
+          _isListening = false;
+          _text = 'Test failed to start';
+        });
+      }
+    } catch (e) {
+      print('Test speech error: $e');
+      _showError('Test failed: $e');
+      setState(() {
+        _isListening = false;
+        _text = 'Test error: $e';
+      });
+    }
+  }

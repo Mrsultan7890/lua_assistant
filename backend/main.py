@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 import json
 import logging
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
