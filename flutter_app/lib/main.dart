@@ -157,14 +157,16 @@ class _LuaHomePageState extends State<LuaHomePage>
       
       print('Speech recognition available: $available');
       
-      setState(() {
-        _speechAvailable = available;
-        if (available) {
-          _text = 'Ready! Say "Hey LUA" or tap Test Speech';
-        } else {
-          _text = 'Speech not available. Use Test Speech button';
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _speechAvailable = available;
+          if (available) {
+            _text = 'Ready! Say "Hey LUA" or tap Test Speech';
+          } else {
+            _text = 'Speech not available. Use Test Speech button';
+          }
+        });
+      }
       
       if (!available) {
         _showError('Speech recognition not available - using fallback mode');
@@ -174,10 +176,12 @@ class _LuaHomePageState extends State<LuaHomePage>
       }
     } catch (e) {
       print('Speech initialization error: $e');
-      setState(() {
-        _speechAvailable = false;
-        _text = 'Speech error. Use Test Speech button';
-      });
+      if (mounted) {
+        setState(() {
+          _speechAvailable = false;
+          _text = 'Speech error. Use Test Speech button';
+        });
+      }
       _showError('Speech initialization failed: $e');
     }
   }
@@ -320,15 +324,21 @@ class _LuaHomePageState extends State<LuaHomePage>
     // Stop any existing listening session first
     if (_isListening) {
       print('Stopping existing listening session...');
-      await _speech.stop();
-      await Future.delayed(Duration(milliseconds: 500));
+      try {
+        await _speech.stop();
+        await Future.delayed(Duration(milliseconds: 500));
+      } catch (e) {
+        print('Error stopping speech: $e');
+      }
     }
     
-    setState(() {
-      _isAlwaysListening = true;
-      _isListening = true;
-      _text = 'Listening for "Hey LUA"...';
-    });
+    if (mounted) {
+      setState(() {
+        _isAlwaysListening = true;
+        _isListening = true;
+        _text = 'Listening for "Hey LUA"...';
+      });
+    }
     
     _waveController.repeat();
     
@@ -337,12 +347,11 @@ class _LuaHomePageState extends State<LuaHomePage>
       bool started = await _speech.listen(
         onResult: _onAlwaysListeningResult,
         listenFor: Duration(minutes: 10),
-        pauseFor: Duration(seconds: 1), // Further reduced pause time
+        pauseFor: Duration(seconds: 1),
         localeId: 'en_US',
         cancelOnError: false,
         partialResults: true,
         onSoundLevelChange: (level) {
-          // More sensitive sound detection
           if (level > 0.05) {
             print('Sound level: $level');
           }
@@ -392,11 +401,13 @@ class _LuaHomePageState extends State<LuaHomePage>
   
   void _activateAssistant() {
     // Stop always listening temporarily
-    setState(() {
-      _isAlwaysListening = false;
-      _isListening = false;
-      _text = 'LUA activated! What can I do for you?';
-    });
+    if (mounted) {
+      setState(() {
+        _isAlwaysListening = false;
+        _isListening = false;
+        _text = 'LUA activated! What can I do for you?';
+      });
+    }
     
     _waveController.stop();
     _speech.stop();
@@ -408,10 +419,12 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Future<void> _listenForCommand() async {
-    setState(() {
-      _isListening = true;
-      _text = 'Listening for your command...';
-    });
+    if (mounted) {
+      setState(() {
+        _isListening = true;
+        _text = 'Listening for your command...';
+      });
+    }
     
     try {
       await _speech.listen(
@@ -419,18 +432,19 @@ class _LuaHomePageState extends State<LuaHomePage>
           if (result.finalResult) {
             _processVoiceCommand(result.recognizedWords);
           } else {
-            setState(() {
-              _text = result.recognizedWords;
-              _confidence = result.confidence;
-            });
+            if (mounted) {
+              setState(() {
+                _text = result.recognizedWords;
+                _confidence = result.confidence;
+              });
+            }
           }
         },
-        listenFor: Duration(seconds: 15), // Increased listening time
-        pauseFor: Duration(seconds: 2), // Reduced pause time
+        listenFor: Duration(seconds: 15),
+        pauseFor: Duration(seconds: 2),
         cancelOnError: false,
         partialResults: true,
         onSoundLevelChange: (level) {
-          // Visual feedback for sound detection
           if (level > 0.2) {
             print('Command sound detected: $level');
           }
@@ -443,11 +457,13 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   void _stopAlwaysListening() {
-    setState(() {
-      _isAlwaysListening = false;
-      _isListening = false;
-      _text = 'LUA is sleeping. Tap to wake up.';
-    });
+    if (mounted) {
+      setState(() {
+        _isAlwaysListening = false;
+        _isListening = false;
+        _text = 'LUA is sleeping. Tap to wake up.';
+      });
+    }
     
     _speech.stop();
     _waveController.stop();
@@ -457,10 +473,12 @@ class _LuaHomePageState extends State<LuaHomePage>
   Future<void> _processVoiceCommand(String command) async {
     if (command.trim().isEmpty) return;
     
-    setState(() {
-      _text = command;
-      _response = 'Processing...';
-    });
+    if (mounted) {
+      setState(() {
+        _text = command;
+        _response = 'Processing...';
+      });
+    }
     
     try {
       final response = await http.post(
@@ -481,7 +499,6 @@ class _LuaHomePageState extends State<LuaHomePage>
         await _handleCommandResult(result);
         _updateStats(command, result);
         
-        // Handle emotional intelligence response
         if (result.containsKey('emotion')) {
           final emotion = result['emotion'];
           _showEmotionalResponse(emotion);
@@ -494,9 +511,11 @@ class _LuaHomePageState extends State<LuaHomePage>
     }
     
     Timer(Duration(seconds: 5), () {
-      setState(() {
-        _isListening = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isListening = false;
+        });
+      }
       _startAlwaysListening();
     });
   }
