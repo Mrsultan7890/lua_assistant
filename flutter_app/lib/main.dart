@@ -256,7 +256,13 @@ class _LuaHomePageState extends State<LuaHomePage>
   }
   
   Future<void> _startAlwaysListening() async {
-    if (!_isInitialized || _isListening) return;
+    if (!_isInitialized) return;
+    
+    // Stop any existing listening session first
+    if (_isListening) {
+      await _speech.stop();
+      await Future.delayed(Duration(milliseconds: 500));
+    }
     
     setState(() {
       _isAlwaysListening = true;
@@ -266,54 +272,86 @@ class _LuaHomePageState extends State<LuaHomePage>
     
     _waveController.repeat();
     
-    await _speech.listen(
-      onResult: _onAlwaysListeningResult,
-      listenFor: Duration(minutes: 10),
-      pauseFor: Duration(seconds: 3),
-      localeId: 'en_US',
-    );
+    try {
+      await _speech.listen(
+        onResult: _onAlwaysListeningResult,
+        listenFor: Duration(minutes: 10),
+        pauseFor: Duration(seconds: 5),
+        localeId: 'en_US',
+        cancelOnError: false,
+        partialResults: true,
+      );
+    } catch (e) {
+      print('Speech listen error: $e');
+      if (_isAlwaysListening) {
+        Timer(Duration(seconds: 3), () => _startAlwaysListening());
+      }
+    }
   }
   
   void _onAlwaysListeningResult(result) {
     String recognizedWords = result.recognizedWords.toLowerCase();
+    print('Recognized: $recognizedWords, Final: ${result.finalResult}');
     
     if (recognizedWords.contains('hey lua') || recognizedWords.contains('hey lula')) {
       _activateAssistant();
-    } else if (_isListening && !recognizedWords.contains('hey')) {
-      _processVoiceCommand(recognizedWords);
+      return; // Don't restart listening immediately after activation
     }
     
+    // Only restart listening when result is final and we're still in always listening mode
     if (_isAlwaysListening && result.finalResult) {
-      Timer(Duration(milliseconds: 500), () => _startAlwaysListening());
+      Timer(Duration(milliseconds: 1000), () {
+        if (_isAlwaysListening && !_isListening) {
+          _startAlwaysListening();
+        }
+      });
     }
   }
   
   void _activateAssistant() {
+    // Stop always listening temporarily
     setState(() {
+      _isAlwaysListening = false;
+      _isListening = false;
       _text = 'LUA activated! What can I do for you?';
     });
+    
+    _waveController.stop();
+    _speech.stop();
     
     _speak('Yes, how can I help you?');
     _pulseController.forward();
     
-    Timer(Duration(seconds: 1), () => _listenForCommand());
+    Timer(Duration(seconds: 2), () => _listenForCommand());
   }
   
   Future<void> _listenForCommand() async {
-    await _speech.listen(
-      onResult: (result) {
-        if (result.finalResult) {
-          _processVoiceCommand(result.recognizedWords);
-        } else {
-          setState(() {
-            _text = result.recognizedWords;
-            _confidence = result.confidence;
-          });
-        }
-      },
-      listenFor: Duration(seconds: 10),
-      pauseFor: Duration(seconds: 2),
-    );
+    setState(() {
+      _isListening = true;
+      _text = 'Listening for your command...';
+    });
+    
+    try {
+      await _speech.listen(
+        onResult: (result) {
+          if (result.finalResult) {
+            _processVoiceCommand(result.recognizedWords);
+          } else {
+            setState(() {
+              _text = result.recognizedWords;
+              _confidence = result.confidence;
+            });
+          }
+        },
+        listenFor: Duration(seconds: 10),
+        pauseFor: Duration(seconds: 3),
+        cancelOnError: false,
+        partialResults: true,
+      );
+    } catch (e) {
+      print('Command listen error: $e');
+      Timer(Duration(seconds: 2), () => _startAlwaysListening());
+    }
   }
   
   void _stopAlwaysListening() {
@@ -367,7 +405,12 @@ class _LuaHomePageState extends State<LuaHomePage>
       _showError('Error: $e');
     }
     
-    Timer(Duration(seconds: 3), () => _startAlwaysListening());
+    Timer(Duration(seconds: 5), () {
+      setState(() {
+        _isListening = false;
+      });
+      _startAlwaysListening();
+    });
   }
   
   Future<void> _handleCommandResult(Map<String, dynamic> result) async {
