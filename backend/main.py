@@ -31,13 +31,53 @@ class LuaBackend:
         self.active_users = {}
         self.command_queue = []
         self.response_cache = {}
+        self.seen_users = set()  # Track first-time users
         
         logger.info("LUA Backend initialized successfully")
+    
+    def is_first_time_user(self, user_id):
+        """Check if user is using LUA for the first time"""
+        return user_id not in self.seen_users
+    
+    def mark_user_as_seen(self, user_id):
+        """Mark user as seen"""
+        self.seen_users.add(user_id)
+    
+    def handle_first_time_user(self):
+        """Handle first time user with welcome message and help"""
+        welcome_text = """
+Welcome to LUA Assistant! I'm your personal voice assistant.
+
+Here's what I can do for you:
+
+📞 CALLS: "Call John" or "Phone 9876543210"
+💬 MESSAGES: "Send message to mom saying I'm coming home"
+📱 APPS: "Open camera", "Launch WhatsApp", "Start music"
+🎵 MUSIC: "Play music", "Pause", "Next song", "Volume up"
+📷 CAMERA: "Take photo", "Open camera", "Selfie mode"
+⏰ REMINDERS: "Remind me to call doctor at 5 PM"
+🌤️ WEATHER: "What's the weather?", "Temperature today"
+
+🔒 IMPORTANT PRIVACY TIP: For your security, please disable microphone and camera permissions for Instagram, YouTube, TikTok, Facebook and other social media apps. These apps can secretly record your conversations and steal your personal data when permissions are enabled. Protect your privacy!
+
+Just say "Hey LUA" anytime to activate me. Try it now!
+        """
+        
+        return {
+            'action': 'welcome',
+            'response': welcome_text.strip(),
+            'success': True
+        }
     
     def process_command(self, user_id, command_text, context=None):
         """Process command with basic text analysis"""
         try:
             start_time = time.time()
+            
+            # Check if first time user
+            if self.is_first_time_user(user_id):
+                self.mark_user_as_seen(user_id)
+                return self.handle_first_time_user()
             
             # Basic command processing
             result = self.execute_command(command_text, context)
@@ -61,7 +101,11 @@ class LuaBackend:
         try:
             command_lower = command_text.lower()
             
-            if any(word in command_lower for word in ['open', 'launch', 'start']):
+            # Help command with privacy warning
+            if any(word in command_lower for word in ['help', 'commands', 'what can you do']):
+                return self.handle_help_command()
+            
+            elif any(word in command_lower for word in ['open', 'launch', 'start']):
                 return self.handle_app_launch(command_text)
             
             elif any(word in command_lower for word in ['call', 'phone', 'dial']):
@@ -85,7 +129,7 @@ class LuaBackend:
             else:
                 return {
                     'action': 'unknown',
-                    'response': 'I understand you said: ' + command_text,
+                    'response': 'I understand you said: ' + command_text + '. Say "help" to see available commands.',
                     'success': True
                 }
                 
@@ -95,6 +139,30 @@ class LuaBackend:
                 'action': 'error',
                 'response': f'Error executing command: {str(e)}'
             }
+    
+    def handle_help_command(self):
+        """Handle help command with privacy warning"""
+        help_text = """
+Here are my available commands:
+
+📞 CALLS: "Call John" or "Phone 9876543210"
+💬 MESSAGES: "Send message to mom saying I'm coming home"
+📱 APPS: "Open camera", "Launch WhatsApp", "Start music"
+🎵 MUSIC: "Play music", "Pause", "Next song", "Volume up"
+📷 CAMERA: "Take photo", "Open camera", "Selfie mode"
+⏰ REMINDERS: "Remind me to call doctor at 5 PM"
+🌤️ WEATHER: "What's the weather?", "Temperature today"
+
+🔒 PRIVACY WARNING: For your security, please disable microphone and camera permissions for Instagram, YouTube, TikTok, Facebook and other social media apps. These apps can access your conversations and personal data when permissions are enabled. Your privacy matters!
+
+Say "Hey LUA" anytime to activate me!
+        """
+        
+        return {
+            'action': 'help',
+            'response': help_text.strip(),
+            'success': True
+        }
     
     def handle_app_launch(self, command_text):
         """Handle app launching"""
