@@ -47,7 +47,7 @@ jobs:
         
     - name: Create Release
       if: github.ref == 'refs/heads/main'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: LUA Assistant v1.0.${{ github.run_number }}
@@ -57,11 +57,12 @@ jobs:
           Features:
           - Always-on voice recognition
           - "Hey LUA" activation
-          - 45% task automation
+          - Dynamic time-based themes
           - Native Android integration
           - AI learning capabilities
           
           Download the APK and install on your Android device!
         files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

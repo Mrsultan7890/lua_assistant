@@ -203,7 +203,6 @@ class _LuaHomePageState extends State<LuaHomePage>
           'text': Color(0xFFffd89b),
           'accent': Color(0xFFf093fb),
           'icon': Icons.wb_twilight,
-          'emoji': '🌅',
         };
       case 'day':
         return {
@@ -212,7 +211,6 @@ class _LuaHomePageState extends State<LuaHomePage>
           'text': Color(0xFF2d3436),
           'accent': Color(0xFFe17055),
           'icon': Icons.wb_sunny,
-          'emoji': '☀️',
         };
       case 'dusk':
         return {
@@ -221,7 +219,6 @@ class _LuaHomePageState extends State<LuaHomePage>
           'text': Color(0xFFdda0dd),
           'accent': Color(0xFFfd79a8),
           'icon': Icons.wb_twilight,
-          'emoji': '🌆',
         };
       default: // night
         return {
@@ -230,7 +227,6 @@ class _LuaHomePageState extends State<LuaHomePage>
           'text': Color(0xFFf5f5dc),
           'accent': Color(0xFF00bcd4),
           'icon': Icons.nightlight_round,
-          'emoji': '🌙',
         };
     }
   }
@@ -552,10 +548,7 @@ class _LuaHomePageState extends State<LuaHomePage>
             ),
           ),
           SizedBox(width: 8),
-          Text(
-            themeColors['emoji'],
-            style: TextStyle(fontSize: 20),
-          ),
+          // Removed emoji for cleaner look
           Spacer(),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
