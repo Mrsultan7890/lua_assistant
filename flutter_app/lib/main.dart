@@ -105,15 +105,15 @@ class _LuaHomePageState extends State<LuaHomePage>
       _isInitialized = true;
     });
     
-    // Start background service
+    // Start background service first
     await _startBackgroundService();
     
-    // Auto-start always listening only if speech is available
-    if (_speechAvailable) {
-      _startAlwaysListening();
-    } else {
-      print('Speech not available, skipping auto-start');
-    }
+    // Don't auto-start Flutter speech recognition - let background service handle wake word
+    print('App initialized. Background service will handle wake word detection.');
+    setState(() {
+      _text = 'LUA is ready! Background service listening for "Hey LUA"';
+      _isAlwaysListening = false; // Let background service handle this
+    });
   }
   
   Future<void> _startBackgroundService() async {
@@ -138,9 +138,16 @@ class _LuaHomePageState extends State<LuaHomePage>
   void _handleBackgroundWakeWord() {
     print('Handling background wake word detection...');
     
+    // Stop any existing Flutter speech recognition to avoid conflicts
+    if (_isListening) {
+      _speech.stop();
+    }
+    
     // Activate assistant immediately
     if (mounted) {
       setState(() {
+        _isAlwaysListening = false; // Background service handles wake word
+        _isListening = false;
         _text = 'LUA activated from background! What can I do for you?';
         _response = '';
       });
@@ -326,15 +333,18 @@ class _LuaHomePageState extends State<LuaHomePage>
   void _onSpeechStatus(String status) {
     print('Speech status: $status');
     
-    // Auto-restart listening if it stops unexpectedly
+    // Don't auto-restart if background service is handling wake word detection
     if (status == 'notListening' && _isAlwaysListening) {
-      print('Speech stopped, restarting in 1 second...');
-      Timer(Duration(seconds: 1), () {
-        if (_isAlwaysListening && !_isListening) {
-          print('Restarting always listening...');
-          _startAlwaysListening();
-        }
-      });
+      print('Speech stopped, but background service should handle wake word detection');
+      // Only restart if we're in active command listening mode
+      if (_text.contains('Listening for your command')) {
+        Timer(Duration(seconds: 1), () {
+          if (_isAlwaysListening && !_isListening) {
+            print('Restarting command listening...');
+            _startAlwaysListening();
+          }
+        });
+      }
     }
   }
   
@@ -1190,20 +1200,18 @@ class _LuaHomePageState extends State<LuaHomePage>
             children: [
               GestureDetector(
                 onTap: () {
-                  if (_speechAvailable) {
-                    if (_isAlwaysListening) {
-                      _stopAlwaysListening();
-                    } else {
-                      _startAlwaysListening();
-                    }
+                  // Manual toggle for testing - background service handles actual wake word
+                  if (_isAlwaysListening) {
+                    _stopAlwaysListening();
                   } else {
-                    _showError('Speech not available. Use Test Speech or Diagnostics');
+                    // Show that background service is active
+                    _showSuccess('Background service is handling wake word detection');
                   }
                 },
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   decoration: BoxDecoration(
-                    color: _isAlwaysListening ? Color(0xFF00bcd4) : Color(0xFF1e2746),
+                    color: Color(0xFF00bcd4), // Always show as active since background service handles it
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(
                       color: Color(0xFF00bcd4),
@@ -1213,23 +1221,15 @@ class _LuaHomePageState extends State<LuaHomePage>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _speechAvailable 
-                            ? (_isAlwaysListening ? Icons.hearing : Icons.hearing_disabled)
-                            : Icons.error,
-                        color: _speechAvailable 
-                            ? (_isAlwaysListening ? Colors.white : Color(0xFF00bcd4))
-                            : Colors.red,
+                        Icons.hearing,
+                        color: Colors.white,
                         size: 20,
                       ),
                       SizedBox(width: 8),
                       Text(
-                        _speechAvailable 
-                            ? (_isAlwaysListening ? 'Always On' : 'Tap to Wake')
-                            : 'Speech Error',
+                        'Background Active',
                         style: TextStyle(
-                          color: _speechAvailable 
-                              ? (_isAlwaysListening ? Colors.white : Color(0xFF00bcd4))
-                              : Colors.red,
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

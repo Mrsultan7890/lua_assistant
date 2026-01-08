@@ -63,12 +63,16 @@ class BackgroundService : Service(), RecognitionListener {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000)
             }
             
             try {
+                android.util.Log.d("LUA_BG_SERVICE", "Starting speech recognition...")
                 speechRecognizer?.startListening(intent)
                 isListening = true
             } catch (e: Exception) {
+                android.util.Log.e("LUA_BG_SERVICE", "Error starting speech recognition: ${e.message}")
                 // Retry after 3 seconds
                 handler.postDelayed({ startListening() }, 3000)
             }
@@ -79,11 +83,15 @@ class BackgroundService : Service(), RecognitionListener {
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         if (matches != null && matches.isNotEmpty()) {
             val spokenText = matches[0].lowercase()
+            android.util.Log.d("LUA_BG_SERVICE", "Heard: '$spokenText'")
             
             // Check for wake word
             if (spokenText.contains("hey lua") || 
                 spokenText.contains("hey lula") ||
-                spokenText.contains("hey loo")) {
+                spokenText.contains("hey loo") ||
+                spokenText.contains("lua")) {
+                
+                android.util.Log.d("LUA_BG_SERVICE", "Wake word detected: '$spokenText'")
                 
                 // Wake word detected - open app
                 val intent = Intent(this, MainActivity::class.java).apply {
