@@ -40,6 +40,12 @@ jobs:
       working-directory: ./flutter_app
       run: flutter clean
       
+    - name: Fix Gradle Wrapper
+      working-directory: ./flutter_app/android
+      run: |
+        chmod +x gradlew
+        ./gradlew wrapper --gradle-version=8.0
+      
     - name: Build APK
       working-directory: ./flutter_app
       run: flutter build apk --release
