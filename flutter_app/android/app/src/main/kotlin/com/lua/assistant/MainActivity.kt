@@ -189,6 +189,8 @@ class MainActivity: FlutterActivity() {
         } catch (e: Exception) {
             result.error("BATTERY_ERROR", "Failed to request battery optimization: ${e.message}", null)
         }
+    }
+    
     private fun enableAccessibilityService(result: MethodChannel.Result) {
         try {
             val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
