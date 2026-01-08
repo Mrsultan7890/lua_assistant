@@ -11,35 +11,30 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # Voice Recognition & TTS (Compatible versions)
-  speech_to_text: ^6.6.0
-  flutter_tts: ^4.0.2
+  # Voice Recognition & TTS (Minimal versions)
+  speech_to_text: ^6.3.0
+  flutter_tts: ^3.8.5
   
-  # HTTP & Networking (Latest secure)
-  http: ^1.2.1
+  # HTTP & Networking
+  http: ^1.1.0
   
-  # Permissions (Latest)
-  permission_handler: ^11.3.1
+  # Permissions
+  permission_handler: ^10.4.3
   
-  # Device Integration (Latest secure)
-  url_launcher: ^6.2.6
+  # Device Integration
+  url_launcher: ^6.1.12
   
-  # Local Storage (Latest)
-  shared_preferences: ^2.2.3
+  # Local Storage
+  shared_preferences: ^2.2.0
   
-  # UI Components (Latest)
-  cupertino_icons: ^1.0.8
+  # UI Components
+  cupertino_icons: ^1.0.6
   
-  # Notifications (Latest secure)
-  flutter_local_notifications: ^17.2.2
+  # Notifications
+  flutter_local_notifications: ^15.1.0
   
-  # Emotional Intelligence
-  flutter_sound: ^9.2.13
-  path_provider: ^2.1.3
-  
-  # Music & Voice Features (Compatible versions)
-  file_picker: ^6.1.1
-  audioplayers: ^5.1.0
+  # Audio & Files (Minimal)
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:
